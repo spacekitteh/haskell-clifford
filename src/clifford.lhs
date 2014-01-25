@@ -46,6 +46,7 @@ The first problem: How to represent basis blades. One way to do it is via genera
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
 data Blade f = Blade {bScale :: f, bIndices :: [Int]} deriving Show
+               -- | Scalar {f :: f} deriving (Show, Eq, Ord)
 
 instance (Algebra.Additive.C f , Eq f) => Eq (Blade f) where
     (==) a b = aScale == bScale && aIndices == bIndices where
@@ -53,13 +54,16 @@ instance (Algebra.Additive.C f , Eq f) => Eq (Blade f) where
                  (Blade bScale bIndices) = bladeNormalForm b
 \end{code}
 
-For example, a scalar would be constructed like so: \texttt{Blade s []}
+For example, a scalar could be constructed like so: \texttt{Blade s []}
 \begin{code}
 scalar :: f -> Blade f
 scalar d = Blade d []
+
+zeroBlade :: (Algebra.Additive.C f) => Blade f
+zeroBlade = scalar Algebra.Additive.zero
 \end{code}
 
-However, the plain data constructor should never be used, for it does no checking of things such as linear dependance; that is, \texttt{b = Blade a [1,2,3,1]} should result in 0. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative.
+However, the plain data constructor should never be used, for it doesn't order htem by default. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative.
 
 \begin{align}
 \vec{e}_1∧...∧\vec{e}_a∧...∧\vec{e}_a∧... = 0\\
@@ -73,15 +77,21 @@ bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
              numOfIndices = length indices
              (sorted, perm) = Data.Permute.sort numOfIndices indices
              scale' = if isEven perm then scale else Algebra.Additive.negate scale
-             uniqueSorted = Data.List.Ordered.nub sorted
-          
+             uniqueSorted = Data.List.Ordered.nub sorted          
 \end{code}
 
-What is the grade of a blade? Just the number of (unique) indices.
+What is the grade of a blade? Just the number of indices.
 
 \begin{code}
 grade :: Blade f -> Int
 grade b = length $ bIndices b
+
+bladeIsOfGrade :: Blade f -> Int -> Bool
+blade `bladeIsOfGrade` k = grade blade == k
+
+bladeGetGrade ::(Algebra.Additive.C f) =>  Int -> Blade f -> Blade f
+bladeGetGrade k blade =
+    if blade `bladeIsOfGrade` k then blade else zeroBlade
 \end{code}
 
 
@@ -92,6 +102,17 @@ bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
 bladeMul x y = bladeNormalForm $ Blade (bScale x * bScale y) (bIndices x ++ bIndices y)
 
 \end{code}
+
+Next up: The outer (wedge) product, denoted by $∧$ :3
+
+\begin{code}
+bWedge :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
+bWedge x y = bladeNormalForm $ bladeGetGrade k xy
+             where
+               k = (grade x) + (grade y)
+               xy = bladeMul x y
+\end{code}
+
 Now let's do the inner product!
 
 
