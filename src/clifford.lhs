@@ -8,8 +8,6 @@
 \setmathfont{latinmodern-math.otf}
 \usepackage{verbatim}
 \begin{document}
-
-
 So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
 
 I am basing the design of this on Issac Trotts' geometric algebra library.\cite{hga}
@@ -31,7 +29,7 @@ import Algebra.OccasionallyScalar
 import Algebra.Transcendental
 import Algebra.ZeroTestable
 import Algebra.Module
-
+import Algebra.Field
 import System.IO
 import Data.List
 import Data.Permute
@@ -70,13 +68,12 @@ However, the plain data constructor should never be used, for it does no checkin
 
 \begin{code}
 bladeNormalForm :: (Algebra.Additive.C f) =>  Blade f -> Blade f
-bladeNormalForm (Blade scale indices) 
-    | (Data.List.Ordered.isSortedBy (/=) sorted) == False =  Blade Algebra.Additive.zero []
-    | otherwise = Blade scale' sorted
+bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
         where
              numOfIndices = length indices
              (sorted, perm) = Data.Permute.sort numOfIndices indices
              scale' = if isEven perm then scale else Algebra.Additive.negate scale
+             uniqueSorted = Data.List.Ordered.nub sorted
           
 \end{code}
 
@@ -89,15 +86,16 @@ grade b = length $ bIndices b
 
 
 First up for operations: Blade multiplication. This is no more than assebling orthogonal vectors into k-vectors. 
+
 \begin{code}
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
 bladeMul x y = bladeNormalForm $ Blade (bScale x * bScale y) (bIndices x ++ bIndices y)
-\end{code}
 
+\end{code}
 Now let's do the inner product!
 
-\begin{code}
 
+\begin{code}
 --dot :: Blade f -> Blade f -> Blade f
 --dot a b = 
 
@@ -115,7 +113,6 @@ lhs2TeX clifford.lhs | xelatex --job="clifford" && evince clifford.pdf
 \end{verbatim}
 $\vec{∀}x∈R$
 \begin{code}
-
 --and this a valid haskell file. compile and run $∃$ with ``ghc clifford.lhs \&\& ./clifford'' 
 cliff = 10
 
