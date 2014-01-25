@@ -80,6 +80,29 @@ bladeNormalForm (Blade scale indices)
           
 \end{code}
 
+What is the grade of a blade? Just the number of (unique) indices.
+
+\begin{code}
+grade :: Blade f -> Int
+grade b = length $ bIndices b
+\end{code}
+
+
+First up for operations: Blade multiplication. This is no more than assebling orthogonal vectors into k-vectors. 
+\begin{code}
+bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
+bladeMul x y = bladeNormalForm $ Blade (bScale x * bScale y) (bIndices x ++ bIndices y)
+\end{code}
+
+Now let's do the inner product!
+
+\begin{code}
+
+--dot :: Blade f -> Blade f -> Blade f
+--dot a b = 
+
+\end{code}
+
 \begin{align}
 ∇ ≡ \vec{\mathbf{x}}\frac{∂}{∂x} + \vec{\mathbf{y}}\frac{∂}{∂y} + \vec{\mathbf{z}}\frac{∂}{∂z}
 \end{align}
