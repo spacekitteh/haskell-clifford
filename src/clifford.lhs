@@ -38,8 +38,6 @@ import Data.Permute
 import Data.List.Ordered
 
 import qualified Test.QuickCheck as QC
-
-
 \end{code}
 
 
@@ -53,6 +51,7 @@ instance (Algebra.Additive.C f , Eq f) => Eq (Blade f) where
     (==) a b = aScale == bScale && aIndices == bIndices where
                  (Blade aScale aIndices) = bladeNormalForm a
                  (Blade bScale bIndices) = bladeNormalForm b
+
 \end{code}
 
 For example, a scalar could be constructed like so: \texttt{Blade s []}
@@ -107,8 +106,9 @@ First up for operations: Blade multiplication. This is no more than assebling or
 
 \begin{code}
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
-bladeMul x y = bladeNormalForm $ Blade (bScale x * bScale y) (bIndices x ++ bIndices y)
+bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
 
+(*) = bladeMul
 \end{code}
 
 Next up: The outer (wedge) product, denoted by $∧$ :3
@@ -119,6 +119,8 @@ bWedge x y = bladeNormalForm $ bladeGetGrade k xy
              where
                k = (grade x) + (grade y)
                xy = bladeMul x y
+
+(^) = bWedge
 \end{code}
 
 Now let's do the inner (dot) product, denoted by $⋅$ :D
@@ -130,10 +132,24 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
           where
             k = Algebra.Absolute.abs $ (grade x) - (grade y)
             xy = bladeMul x y
+
+(.) = bDot
 propBladeDotAssociative = Algebra.Laws.associative bDot
+
 \end{code}
 
 These are the three fundamental operations on basis blades.
+
+Since blades of the same grade form a vector space, they can be added and scaled!
+
+\begin{code}
+--perhaps i should use type arithmetic to represent the grade?
+
+--instance (Algebra.Additive.C f) => Algebra.Additive.C (Blade f) where
+--    zero = zeroScalar
+--    (+) a b =
+        
+\end{code}
 
 \begin{align}
 ∇ ≡ \vec{\mathbf{x}}\frac{∂}{∂x} + \vec{\mathbf{y}}\frac{∂}{∂y} + \vec{\mathbf{z}}\frac{∂}{∂z}
