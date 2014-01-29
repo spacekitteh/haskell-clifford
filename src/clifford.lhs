@@ -22,7 +22,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude
+import NumericPrelude hiding (Integer)
 import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Additive
@@ -36,10 +36,9 @@ import System.IO
 import Data.List
 import Data.Permute
 import Data.List.Ordered
-
+import Data.Ord
+import Number.NonNegative
 import qualified Test.QuickCheck as QC
-
-
 \end{code}
 
 
@@ -47,12 +46,21 @@ The first problem: How to represent basis blades. One way to do it is via genera
 
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
-data Blade f = Blade {bScale :: f, bIndices :: [Int]} deriving Show
-
-instance (Algebra.Additive.C f , Eq f) => Eq (Blade f) where
+data Blade f = Blade {bScale :: f, bIndices :: [Integer]} 
+instance(Show f) =>  Show (Blade f) where
+    --TODO: Do this with HaTeX
+    show  (Blade scale indices) = pref ++  if indices == [] then "" else basis where
+                        pref = show scale
+                        basis =  foldr (++) "" textIndices
+                        textIndices = map vecced indices
+                        vecced index = "\\vec{e_{" ++ (show index) ++ "}}"
+                                                
+                        
+instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
     (==) a b = aScale == bScale && aIndices == bIndices where
                  (Blade aScale aIndices) = bladeNormalForm a
                  (Blade bScale bIndices) = bladeNormalForm b
+
 \end{code}
 
 For example, a scalar could be constructed like so: \texttt{Blade s []}
@@ -62,6 +70,11 @@ scalar d = Blade d []
 
 zeroBlade :: (Algebra.Additive.C f) => Blade f
 zeroBlade = scalar Algebra.Additive.zero
+
+bladeNonZero b = bScale b /= Algebra.Additive.zero
+
+bladeNegate b = Blade (Algebra.Additive.negate bScale b) (bIndices b)
+
 \end{code}
 
 However, the plain data constructor should never be used, for it doesn't order them by default. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative. Additionally, since $\vec{e}_k^2 = 1$, pairs of them should be removed.
@@ -91,23 +104,27 @@ bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
 What is the grade of a blade? Just the number of indices.
 
 \begin{code}
-grade :: Blade f -> Int
-grade b = length $ bIndices b
+grade :: Blade f -> Integer
+grade b = fromNumber $ toInteger $ length $ bIndices b
 
-bladeIsOfGrade :: Blade f -> Int -> Bool
+bladeIsOfGrade :: Blade f -> Integer -> Bool
 blade `bladeIsOfGrade` k = grade blade == k
 
-bladeGetGrade ::(Algebra.Additive.C f) =>  Int -> Blade f -> Blade f
+bladeGetGrade ::(Algebra.Additive.C f) =>  Integer -> Blade f -> Blade f
 bladeGetGrade k blade =
     if blade `bladeIsOfGrade` k then blade else zeroBlade
 \end{code}
 
 
-First up for operations: Blade multiplication. This is no more than assebling orthogonal vectors into k-vectors. 
+
+First up for operations: Blade multiplication. This is no more than assembling orthogonal vectors into k-vectors. 
 
 \begin{code}
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
-bladeMul x y = bladeNormalForm $ Blade (bScale x * bScale y) (bIndices x ++ bIndices y)
+bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
+
+(*) = bladeMul
+
 
 \end{code}
 
@@ -119,6 +136,8 @@ bWedge x y = bladeNormalForm $ bladeGetGrade k xy
              where
                k = (grade x) + (grade y)
                xy = bladeMul x y
+
+(^) = bWedge
 \end{code}
 
 Now let's do the inner (dot) product, denoted by $⋅$ :D
@@ -130,45 +149,57 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
           where
             k = Algebra.Absolute.abs $ (grade x) - (grade y)
             xy = bladeMul x y
+
+(.) = bDot
 propBladeDotAssociative = Algebra.Laws.associative bDot
+
 \end{code}
 
 These are the three fundamental operations on basis blades.
 
-\begin{align}
-∇ ≡ \vec{\mathbf{x}}\frac{∂}{∂x} + \vec{\mathbf{y}}\frac{∂}{∂y} + \vec{\mathbf{z}}\frac{∂}{∂z}
-\end{align}
-This is a simple Clifford algebra implentation. or it was the start of one before i started
-trying to do fancy emacs/latex trickery.
+Now for linear combinations of (possibly different basis) blades. To start with, let's order basis blades:
 
-To compile this to a pdf, run
-\begin{verbatim}
-lhs2TeX clifford.lhs | xelatex --job="clifford" && evince clifford.pdf
-\end{verbatim}
-$\vec{∀}x∈R$
 \begin{code}
---and this a valid haskell file. compile and run $∃$ with ``ghc clifford.lhs \&\& ./clifford'' 
-cliff = 10
-
-greeting = "hi dora :3333 <3"
-
-swedish  = intersperse 'f'
-
-inswedish = swedish greeting
-
-main :: IO ()
-
-main = putStrLn inswedish
+instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
+    --compare :: Blade f -> Blade f -> Ordering
+    compare a b  | bIndices a == bIndices b = compare (bScale a) (bScale b)
+                 | otherwise = compare (bIndices a) (bIndices b)
 \end{code}
+
+A multivector is nothing but a linear combination of basis blades.
+
+\begin{code}
+data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving Show
+
+mvNormalForm mv = BladeSum $ filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
+
+addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
+addLikeTerms [] = []
+addLikeTerms [a] = [a]
+addLikeTerms (x:y:rest) | bIndices x == bIndices y =
+                            addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
+                        | otherwise = x : addLikeTerms (y:rest)
+
+--Constructs a multivector from a scaled blade.
+e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
+s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
+
+instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
+    a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
+    a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
+    zero = BladeSum $ [scalar Algebra.Additive.zero]
+
+\end{code}
+
+Now it is time for the Clifford product. :3
+
 \begin{code}
 
+instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
+    a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
+    one = BladeSum [scalar $ Algebra.Ring.one]
+    fromInteger i = BladeSum [scalar $ Algebra.Ring.fromInteger i]
 \end{code}
-\begin{align}
-hi
-\end{align}
-%this is actually a haskell file so yeah. the next page is the soruce code :v!!! :
-%\newpage
-%\verbatiminput{clifford.lhs}
 
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
