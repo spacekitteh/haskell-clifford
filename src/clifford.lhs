@@ -72,6 +72,9 @@ zeroBlade :: (Algebra.Additive.C f) => Blade f
 zeroBlade = scalar Algebra.Additive.zero
 
 bladeNonZero b = bScale b /= Algebra.Additive.zero
+
+bladeNegate b = Blade (Algebra.Additive.negate bScale b) (bIndices b)
+
 \end{code}
 
 However, the plain data constructor should never be used, for it doesn't order them by default. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative. Additionally, since $\vec{e}_k^2 = 1$, pairs of them should be removed.
@@ -114,7 +117,7 @@ bladeGetGrade k blade =
 
 
 
-First up for operations: Blade multiplication. This is no more than assebling orthogonal vectors into k-vectors. 
+First up for operations: Blade multiplication. This is no more than assembling orthogonal vectors into k-vectors. 
 
 \begin{code}
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
@@ -168,7 +171,7 @@ A multivector is nothing but a linear combination of basis blades.
 \begin{code}
 data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving Show
 
-mvNormalForm mv = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
+mvNormalForm mv = BladeSum $ filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
 
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
@@ -176,6 +179,26 @@ addLikeTerms [a] = [a]
 addLikeTerms (x:y:rest) | bIndices x == bIndices y =
                             addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
                         | otherwise = x : addLikeTerms (y:rest)
+
+--Constructs a multivector from a scaled blade.
+e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
+s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
+
+instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
+    a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
+    a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
+    zero = BladeSum $ [scalar Algebra.Additive.zero]
+
+\end{code}
+
+Now it is time for the Clifford product. :3
+
+\begin{code}
+
+instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
+    a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
+    one = BladeSum [scalar $ Algebra.Ring.one]
+    fromInteger i = BladeSum [scalar $ Algebra.Ring.fromInteger i]
 \end{code}
 
 \bibliographystyle{IEEEtran}
