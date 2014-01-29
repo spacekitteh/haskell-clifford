@@ -25,6 +25,7 @@ module Clifford  where
 import NumericPrelude hiding (Integer)
 import Algebra.Laws
 import Algebra.Absolute
+import Algebra.Algebraic
 import Algebra.Additive
 import Algebra.Ring
 import Algebra.OccasionallyScalar
@@ -38,6 +39,7 @@ import Data.Permute
 import Data.List.Ordered
 import Data.Ord
 import Number.NonNegative
+import NumericPrelude.Numeric (sum)
 import qualified Test.QuickCheck as QC
 \end{code}
 
@@ -65,11 +67,11 @@ instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
 
 For example, a scalar could be constructed like so: \texttt{Blade s []}
 \begin{code}
-scalar :: f -> Blade f
-scalar d = Blade d []
+scalarBlade :: f -> Blade f
+scalarBlade d = Blade d []
 
 zeroBlade :: (Algebra.Additive.C f) => Blade f
-zeroBlade = scalar Algebra.Additive.zero
+zeroBlade = scalarBlade Algebra.Additive.zero
 
 bladeNonZero b = bScale b /= Algebra.Additive.zero
 
@@ -184,10 +186,13 @@ addLikeTerms (x:y:rest) | bIndices x == bIndices y =
 e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 
+scalar s = s `e` []
+
+
 instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
-    zero = BladeSum $ [scalar Algebra.Additive.zero]
+    zero = BladeSum $ [scalarBlade Algebra.Additive.zero]
 
 \end{code}
 
@@ -197,8 +202,21 @@ Now it is time for the Clifford product. :3
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
-    one = BladeSum [scalar $ Algebra.Ring.one]
-    fromInteger i = BladeSum [scalar $ Algebra.Ring.fromInteger i]
+    one = scalar Algebra.Ring.one
+    fromInteger i = scalar $ Algebra.Ring.fromInteger i
+\end{code}
+
+Clifford numbers have a magnitude and absolute value:
+
+\begin{code}
+
+magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
+magnitude mv = sqrt $ NumericPrelude.Numeric.sum $ map (\b -> (Algebra.Ring.^) (bScale b) 2) $ mvTerms mv
+
+instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolute.C (Multivector f) where
+    abs v =  magnitude v `e` []
+    signum (BladeSum [Blade scale []]) = scalar $ signum scale 
+    signum (BladeSum []) = scalar Algebra.Additive.zero
 \end{code}
 
 \bibliographystyle{IEEEtran}
