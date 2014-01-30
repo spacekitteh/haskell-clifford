@@ -17,6 +17,8 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
@@ -125,7 +127,6 @@ First up for operations: Blade multiplication. This is no more than assembling o
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
 bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
 
-(*) = bladeMul
 
 
 \end{code}
@@ -217,6 +218,10 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
     abs v =  magnitude v `e` []
     signum (BladeSum [Blade scale []]) = scalar $ signum scale 
     signum (BladeSum []) = scalar Algebra.Additive.zero
+
+instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
+  (*>) s v = (scalar s) * v
+
 \end{code}
 
 \bibliographystyle{IEEEtran}
