@@ -268,6 +268,11 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
 reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
 
+inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
+
+--root n a = converge $ where
+--    deltaX = oneOverN *> (a
+
 \end{code}
 
 \bibliographystyle{IEEEtran}
