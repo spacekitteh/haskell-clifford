@@ -17,6 +17,8 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
@@ -25,20 +27,26 @@ module Clifford  where
 import NumericPrelude hiding (Integer)
 import Algebra.Laws
 import Algebra.Absolute
+import Algebra.Algebraic
 import Algebra.Additive
 import Algebra.Ring
 import Algebra.OccasionallyScalar
+import Algebra.ToInteger
 import Algebra.Transcendental
 import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
+import MathObj.Polynomial.Core
 import System.IO
 import Data.List
 import Data.Permute
 import Data.List.Ordered
 import Data.Ord
 import Number.NonNegative
+import NumericPrelude.Numeric (sum)
+import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
+import Math.Sequence.Converge
 \end{code}
 
 
@@ -65,11 +73,11 @@ instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
 
 For example, a scalar could be constructed like so: \texttt{Blade s []}
 \begin{code}
-scalar :: f -> Blade f
-scalar d = Blade d []
+scalarBlade :: f -> Blade f
+scalarBlade d = Blade d []
 
 zeroBlade :: (Algebra.Additive.C f) => Blade f
-zeroBlade = scalar Algebra.Additive.zero
+zeroBlade = scalarBlade Algebra.Additive.zero
 
 bladeNonZero b = bScale b /= Algebra.Additive.zero
 
@@ -123,7 +131,6 @@ First up for operations: Blade multiplication. This is no more than assembling o
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
 bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
 
-(*) = bladeMul
 
 
 \end{code}
@@ -137,7 +144,6 @@ bWedge x y = bladeNormalForm $ bladeGetGrade k xy
                k = (grade x) + (grade y)
                xy = bladeMul x y
 
-(^) = bWedge
 \end{code}
 
 Now let's do the inner (dot) product, denoted by $⋅$ :D
@@ -150,7 +156,6 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
             k = Algebra.Absolute.abs $ (grade x) - (grade y)
             xy = bladeMul x y
 
-(.) = bDot
 propBladeDotAssociative = Algebra.Laws.associative bDot
 
 \end{code}
@@ -169,25 +174,30 @@ instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving Show
+data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving (Show, Eq)
 
-mvNormalForm mv = BladeSum $ filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
+mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
+    resultant = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
 
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
 addLikeTerms [a] = [a]
 addLikeTerms (x:y:rest) | bIndices x == bIndices y =
                             addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
+--                        | bIndices x 
                         | otherwise = x : addLikeTerms (y:rest)
 
 --Constructs a multivector from a scaled blade.
 e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 
+scalar s = s `e` []
+
+
 instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
-    zero = BladeSum $ [scalar Algebra.Additive.zero]
+    zero = BladeSum $ [scalarBlade Algebra.Additive.zero]
 
 \end{code}
 
@@ -197,8 +207,72 @@ Now it is time for the Clifford product. :3
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
-    one = BladeSum [scalar $ Algebra.Ring.one]
-    fromInteger i = BladeSum [scalar $ Algebra.Ring.fromInteger i]
+    one = scalar Algebra.Ring.one
+    fromInteger i = scalar $ Algebra.Ring.fromInteger i
+\end{code}
+
+Clifford numbers have a magnitude and absolute value:
+
+\begin{code}
+
+magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
+magnitude mv = sqrt $ NumericPrelude.Numeric.sum $ map (\b -> (Algebra.Ring.^) (bScale b) 2) $ mvTerms mv
+
+instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolute.C (Multivector f) where
+    abs v =  magnitude v `e` []
+    signum (BladeSum [Blade scale []]) = scalar $ signum scale 
+    signum (BladeSum []) = scalar Algebra.Additive.zero
+
+instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
+  (*>) s v = (scalar s) * v
+
+(/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
+
+(/) v d = (recip d) *> v
+
+
+integratePoly c x = c : zipWith (Clifford./) x progression
+
+
+exp ::(Algebra.Ring.C f, Eq f, Ord f, Algebra.Field.C f)=> Multivector f -> Multivector f
+exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms x
+
+takeEvery nth xs = case drop (nth-1) xs of
+                     (y:ys) -> y : takeEvery nth ys
+                     [] -> []
+
+cosh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ expTerms x
+
+sinh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ tail $ expTerms x
+
+seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
+seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
+
+
+sin x = converge $ scanl (+) Algebra.Additive.zero $ sinTerms x
+sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
+cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
+cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
+
+expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
+        power k = (Algebra.Ring.^) x k
+        factorial 0 = 1
+        factorial 1 = 1
+        factorial fac = fac * factorial (fac-1)
+
+dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
+wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
+(∧) = wedge
+(⋅) = dot
+
+reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
+reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
+
+inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
+
+--root n a = converge $ where
+--    deltaX = oneOverN *> (a
+
 \end{code}
 
 \bibliographystyle{IEEEtran}
