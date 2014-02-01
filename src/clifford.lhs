@@ -31,10 +31,12 @@ import Algebra.Algebraic
 import Algebra.Additive
 import Algebra.Ring
 import Algebra.OccasionallyScalar
+import Algebra.ToInteger
 import Algebra.Transcendental
 import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
+import MathObj.Polynomial.Core
 import System.IO
 import Data.List
 import Data.Permute
@@ -42,7 +44,9 @@ import Data.List.Ordered
 import Data.Ord
 import Number.NonNegative
 import NumericPrelude.Numeric (sum)
+import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
+import Math.Sequence.Converge
 \end{code}
 
 
@@ -172,15 +176,17 @@ instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving Show
+data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving (Show, Eq)
 
-mvNormalForm mv = BladeSum $ filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
+mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
+    resultant = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
 
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
 addLikeTerms [a] = [a]
 addLikeTerms (x:y:rest) | bIndices x == bIndices y =
                             addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
+--                        | bIndices x 
                         | otherwise = x : addLikeTerms (y:rest)
 
 --Constructs a multivector from a scaled blade.
@@ -221,6 +227,38 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
   (*>) s v = (scalar s) * v
+
+(/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
+
+(/) v d = (recip d) *> v
+
+
+integratePoly c x = c : zipWith (Clifford./) x progression
+
+
+exp ::(Algebra.Ring.C f, Eq f, Ord f, Algebra.Field.C f)=> Multivector f -> Multivector f
+exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms x
+
+takeEvery nth xs = case drop (nth-1) xs of
+                     (y:ys) -> y : takeEvery nth ys
+                     [] -> []
+
+cosh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ expTerms x
+
+sinh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ tail $ expTerms x
+
+seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
+seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
+
+
+sin x = converge $ scanl (+) Algebra.Additive.zero $ seriesPlusMinus $ takeEvery 2 $ expTerms x
+cos x = converge $ scanl (+) Algebra.Ring.one $ seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
+
+expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
+        power k = (Algebra.Ring.^) x k
+        factorial 0 = 1
+        factorial 1 = 1
+        factorial fac = fac * factorial (fac-1)
 
 \end{code}
 
