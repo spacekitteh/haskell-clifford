@@ -144,7 +144,6 @@ bWedge x y = bladeNormalForm $ bladeGetGrade k xy
                k = (grade x) + (grade y)
                xy = bladeMul x y
 
-(^) = bWedge
 \end{code}
 
 Now let's do the inner (dot) product, denoted by $⋅$ :D
@@ -157,7 +156,6 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
             k = Algebra.Absolute.abs $ (grade x) - (grade y)
             xy = bladeMul x y
 
-(.) = bDot
 propBladeDotAssociative = Algebra.Laws.associative bDot
 
 \end{code}
@@ -264,6 +262,9 @@ expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN
 
 dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
+(∧) = wedge
+(⋅) = dot
+
 \end{code}
 
 \bibliographystyle{IEEEtran}
