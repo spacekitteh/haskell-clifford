@@ -251,8 +251,10 @@ seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
 
 
-sin x = converge $ scanl (+) Algebra.Additive.zero $ seriesPlusMinus $ takeEvery 2 $ expTerms x
-cos x = converge $ scanl (+) Algebra.Ring.one $ seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
+sin x = converge $ scanl (+) Algebra.Additive.zero $ sinTerms x
+sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
+cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
+cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
 expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
         power k = (Algebra.Ring.^) x k
@@ -260,6 +262,8 @@ expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN
         factorial 1 = 1
         factorial fac = fac * factorial (fac-1)
 
+dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
+wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
 \end{code}
 
 \bibliographystyle{IEEEtran}
