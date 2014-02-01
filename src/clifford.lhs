@@ -265,6 +265,9 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 (∧) = wedge
 (⋅) = dot
 
+reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
+reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
+
 \end{code}
 
 \bibliographystyle{IEEEtran}
