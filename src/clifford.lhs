@@ -228,8 +228,10 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
 
-(/) v d = (recip d) *> v
+(/) v d = (Algebra.Field.recip d) *> v
 
+(</) n d = (Clifford.inverse d) * n
+(/>) n d = n * Clifford.inverse d
 
 integratePoly c x = c : zipWith (Clifford./) x progression
 
@@ -269,9 +271,17 @@ reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
 reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
 
 inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
+recip=Clifford.inverse
 
---root n a = converge $ where
---    deltaX = oneOverN *> (a
+
+root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
+root n a = converge $ rootIterations n a
+rootIterations n a = iterate xkplus1 one  where
+    xkplus1 xk = xk + deltaxk xk
+    deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
+    oneOverN = scalar $ NPN.recip $ fromInteger $  n
+ 
+
 
 \end{code}
 
