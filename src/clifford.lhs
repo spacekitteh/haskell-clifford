@@ -227,7 +227,6 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
   (*>) s v = (scalar s) * v
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
-
 (/) v d = (Algebra.Field.recip d) *> v
 
 (</) n d = (Clifford.inverse d) * n
@@ -272,8 +271,11 @@ reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
 
 inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
 recip=Clifford.inverse
+\end{code}
 
+Let's use Newton iteration to find the principal n-th root :3
 
+\begin{code}
 root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
 root n a = converge $ rootIterationsStart n a one
 
@@ -288,9 +290,6 @@ rootIterations n a initialGuess = iterate xkplus1 initialGuess  where
                      xkplus1 xk = xk + deltaxk xk
                      deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
                      oneOverN = scalar $ NPN.recip $ fromInteger $  n
- 
-
-
 \end{code}
 
 \bibliographystyle{IEEEtran}
