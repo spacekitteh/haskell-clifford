@@ -275,11 +275,19 @@ recip=Clifford.inverse
 
 
 root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
-root n a = converge $ rootIterations n a
-rootIterations n a = iterate xkplus1 one  where
-    xkplus1 xk = xk + deltaxk xk
-    deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
-    oneOverN = scalar $ NPN.recip $ fromInteger $  n
+root n a = converge $ rootIterationsStart n a one
+
+rootIterationsStart ::(Algebra.Field.C f, Ord f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterationsStart n a@(BladeSum [Blade s [], xs]) one = rootIterations n a g where
+                     g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
+rootIterationsStart n a g = rootIterations n a g
+
+
+rootIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterations n a initialGuess = iterate xkplus1 initialGuess  where
+                     xkplus1 xk = xk + deltaxk xk
+                     deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
+                     oneOverN = scalar $ NPN.recip $ fromInteger $  n
  
 
 
