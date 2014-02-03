@@ -273,23 +273,36 @@ inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (rev
 recip=Clifford.inverse
 \end{code}
 
-Let's use Newton iteration to find the principal n-th root :3
+Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
 root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
 root n a = converge $ rootIterationsStart n a one
 
 rootIterationsStart ::(Algebra.Field.C f, Ord f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootIterationsStart n a@(BladeSum [Blade s [], xs]) one = rootIterations n a g where
+rootIterationsStart n a@(BladeSum ((Blade s []):xs)) one = rootHalleysIterations n a g where
                      g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
-rootIterationsStart n a g = rootIterations n a g
+rootIterationsStart n a g = rootHalleysIterations n a g
 
 
-rootIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootIterations n a initialGuess = iterate xkplus1 initialGuess  where
+rootNewtonIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootNewtonIterations n a initialGuess = iterate xkplus1 initialGuess  where
                      xkplus1 xk = xk + deltaxk xk
                      deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
                      oneOverN = scalar $ NPN.recip $ fromInteger $  n
+
+rootHalleysIterations :: (Algebra.Field.C a, Ord a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
+rootHalleysIterations n a initialGuess = halleysMethod f f' f'' initialGuess where
+    f x = a - (x^ n)
+    f' x = (fromInteger (-n))*(x^(n-1))
+    f'' x = (fromInteger (-(n*(n-1)))) * (x^(n-2))
+
+halleysMethod :: (Algebra.Field.C a, Ord a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
+halleysMethod f f' f'' initialGuess = iterate update initialGuess where
+    update x = x - ((numerator x) * (Clifford.inverse (denominator x))) where
+        numerator x = Algebra.Ring.product1 [fromInteger 2, one, f x, f' x]
+        denominator x = (Algebra.Ring.product1 [fromInteger 2, f' x, f' x]) - ((f x) * (f'' x))
+
 \end{code}
 
 \bibliographystyle{IEEEtran}
