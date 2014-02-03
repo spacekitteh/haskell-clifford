@@ -167,8 +167,8 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 \begin{code}
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
     --compare :: Blade f -> Blade f -> Ordering
-    compare a b  | bIndices a == bIndices b = compare (bScale a) (bScale b)
-                 | otherwise = compare (bIndices a) (bIndices b)
+    compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
+                | otherwise =  compare (bIndices a) (bIndices b)
 \end{code}
 
 A multivector is nothing but a linear combination of basis blades.
@@ -184,7 +184,6 @@ addLikeTerms [] = []
 addLikeTerms [a] = [a]
 addLikeTerms (x:y:rest) | bIndices x == bIndices y =
                             addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
---                        | bIndices x 
                         | otherwise = x : addLikeTerms (y:rest)
 
 --Constructs a multivector from a scaled blade.
