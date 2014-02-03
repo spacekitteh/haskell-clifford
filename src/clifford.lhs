@@ -47,6 +47,7 @@ import NumericPrelude.Numeric (sum)
 import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge
+import Number.Ratio
 \end{code}
 
 
@@ -197,7 +198,6 @@ instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) whe
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
     zero = BladeSum $ [scalarBlade Algebra.Additive.zero]
-
 \end{code}
 
 Now it is time for the Clifford product. :3
@@ -230,6 +230,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
 
 (</) n d = (Clifford.inverse d) * n
 (/>) n d = n * Clifford.inverse d
+(</>) n d = n /> d
 
 integratePoly c x = c : zipWith (Clifford./) x progression
 
@@ -302,6 +303,16 @@ halleysMethod f f' f'' initialGuess = iterate update initialGuess where
         numerator x = Algebra.Ring.product1 [fromInteger 2, one, f x, f' x]
         denominator x = (Algebra.Ring.product1 [fromInteger 2, f' x, f' x]) - ((f x) * (f'' x))
 
+\end{code}
+
+Now let's try logarithms by fixed point iteration. It's gonna be slow, but whatever!
+
+\begin{code}
+
+log a = converge $ halleysMethod f f' f'' one where
+    f x = a - Clifford.exp x
+    f' x = NPN.negate $ Clifford.exp x
+    f'' = f'
 \end{code}
 
 \bibliographystyle{IEEEtran}
