@@ -47,6 +47,7 @@ import NumericPrelude.Numeric (sum)
 import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge
+import Number.Ratio
 \end{code}
 
 
@@ -167,8 +168,8 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 \begin{code}
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
     --compare :: Blade f -> Blade f -> Ordering
-    compare a b  | bIndices a == bIndices b = compare (bScale a) (bScale b)
-                 | otherwise = compare (bIndices a) (bIndices b)
+    compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
+                | otherwise =  compare (bIndices a) (bIndices b)
 \end{code}
 
 A multivector is nothing but a linear combination of basis blades.
@@ -184,7 +185,6 @@ addLikeTerms [] = []
 addLikeTerms [a] = [a]
 addLikeTerms (x:y:rest) | bIndices x == bIndices y =
                             addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
---                        | bIndices x 
                         | otherwise = x : addLikeTerms (y:rest)
 
 --Constructs a multivector from a scaled blade.
@@ -198,7 +198,6 @@ instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) whe
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
     zero = BladeSum $ [scalarBlade Algebra.Additive.zero]
-
 \end{code}
 
 Now it is time for the Clifford product. :3
@@ -227,9 +226,11 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
   (*>) s v = (scalar s) * v
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
+(/) v d = (Algebra.Field.recip d) *> v
 
-(/) v d = (recip d) *> v
-
+(</) n d = (Clifford.inverse d) * n
+(/>) n d = n * Clifford.inverse d
+(</>) n d = n /> d
 
 integratePoly c x = c : zipWith (Clifford./) x progression
 
@@ -269,12 +270,59 @@ reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
 reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
 
 inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
+recip=Clifford.inverse
+\end{code}
 
---root n a = converge $ where
---    deltaX = oneOverN *> (a
+Let's use Newton or Halley iteration to find the principal n-th root :3
+
+\begin{code}
+root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
+root n a = converge $ rootIterationsStart n a one
+
+rootIterationsStart ::(Algebra.Field.C f, Ord f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterationsStart n a@(BladeSum ((Blade s []):xs)) one = rootHalleysIterations n a g where
+                     g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
+rootIterationsStart n a g = rootHalleysIterations n a g
+
+
+rootNewtonIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootNewtonIterations n a initialGuess = iterate xkplus1 initialGuess  where
+                     xkplus1 xk = xk + deltaxk xk
+                     deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
+                     oneOverN = scalar $ NPN.recip $ fromInteger $  n
+
+rootHalleysIterations :: (Algebra.Field.C a, Ord a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
+rootHalleysIterations n a initialGuess = halleysMethod f f' f'' initialGuess where
+    f x = a - (x^ n)
+    f' x = (fromInteger (-n))*(x^(n-1))
+    f'' x = (fromInteger (-(n*(n-1)))) * (x^(n-2))
+
+halleysMethod :: (Algebra.Field.C a, Ord a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
+halleysMethod f f' f'' initialGuess = iterate update initialGuess where
+    update x = x - ((numerator x) * (Clifford.inverse (denominator x))) where
+        numerator x = Algebra.Ring.product1 [fromInteger 2, one, f x, f' x]
+        denominator x = (Algebra.Ring.product1 [fromInteger 2, f' x, f' x]) - ((f x) * (f'' x))
 
 \end{code}
 
+Now let's try logarithms by fixed point iteration. It's gonna be slow, but whatever!
+
+\begin{code}
+
+log a = converge $ halleysMethod f f' f'' $ Clifford.root 3 a where
+    f x = a - Clifford.exp x
+    f' x = NPN.negate $ Clifford.exp x
+    f'' = f'
+\end{code}
+
+Now let's do (slow as fuck probably) numerical integration! :D~! Since this is gonna be used for physical applications, it's we're gonna start off with a Hamiltonian structure and then a symplectic integrator.
+
+\begin{code}
+
+data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
+
+data DynamicSystem f = DynamicSystem { coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f}
+\end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
 \end{document}
