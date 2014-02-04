@@ -309,12 +309,20 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 
 \begin{code}
 
-log a = converge $ halleysMethod f f' f'' one where
+log a = converge $ halleysMethod f f' f'' $ Clifford.root 3 a where
     f x = a - Clifford.exp x
     f' x = NPN.negate $ Clifford.exp x
     f'' = f'
 \end{code}
 
+Now let's do (slow as fuck probably) numerical integration! :D~! Since this is gonna be used for physical applications, it's we're gonna start off with a Hamiltonian structure and then a symplectic integrator.
+
+\begin{code}
+
+data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
+
+data DynamicSystem f = DynamicSystem { coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f}
+\end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
 \end{document}
