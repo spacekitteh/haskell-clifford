@@ -167,7 +167,6 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 
 \begin{code}
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
-    --compare :: Blade f -> Blade f -> Ordering
     compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
                 | otherwise =  compare (bIndices a) (bIndices b)
 \end{code}
@@ -321,7 +320,12 @@ Now let's do (slow as fuck probably) numerical integration! :D~! Since this is g
 
 data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
 
-data DynamicSystem f = DynamicSystem { coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f}
+data DynamicSystem f = DynamicSystem {time :: f, coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f}
+
+evaluateDerivative s = (dq, dp) where
+    dq = map ($ s) ((dqs . energyFunction) s)
+    dp = map ($ s) ((dps . energyFunction) s)
+
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
