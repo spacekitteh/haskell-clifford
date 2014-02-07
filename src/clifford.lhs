@@ -302,6 +302,12 @@ halleysMethod f f' f'' initialGuess = iterate update initialGuess where
         numerator x = Algebra.Ring.product1 [fromInteger 2, one, f x, f' x]
         denominator x = (Algebra.Ring.product1 [fromInteger 2, f' x, f' x]) - ((f x) * (f'' x))
 
+
+secantMethod f x0 x1 = update x1 x0  where
+    update xm1 xm2 | xm1 == xm2 = [xm1]
+                   | otherwise = if x == xm1 then [x] else x : update x xm1 where
+      x = xm1 - (f xm1) * (xm1-xm2) * Clifford.inverse ((f xm1) - (f xm2))
+
 \end{code}
 
 Now let's try logarithms by fixed point iteration. It's gonna be slow, but whatever!
@@ -320,12 +326,14 @@ Now let's do (slow as fuck probably) numerical integration! :D~! Since this is g
 
 data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
 
-data DynamicSystem f = DynamicSystem {time :: f, coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f}
+data DynamicSystem f = DynamicSystem {time :: f, coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f, projector :: (DynamicSystem f -> DynamicSystem f)}
 
 evaluateDerivative s = (dq, dp) where
     dq = map ($ s) ((dqs . energyFunction) s)
     dp = map ($ s) ((dps . energyFunction) s)
 
+--add function to project to allowable configuration space after each update step 
+--use secant or whatever method for fixed point iteration for implicit parts of runge kutta
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
