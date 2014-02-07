@@ -48,6 +48,7 @@ import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge
 import Number.Ratio
+import qualified GHC.Num as PNum
 \end{code}
 
 
@@ -270,6 +271,27 @@ reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
 
 inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
 recip=Clifford.inverse
+
+instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
+--    toScalar :: (Algebra.Additive.C f) => Multivector f -> f
+    toScalar = bScale . (bladeGetGrade 0) . head . mvTerms
+    toMaybeScalar (BladeSum [Blade s []]) = Just s
+    toMaybeScalar (BladeSum []) = Just Algebra.Additive.zero
+    toMaybeScalar _ = Nothing
+    fromScalar = scalar
+\end{code}
+
+Also, we may as well implement the standard prelude Num interface.
+
+\begin{code}
+instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) => PNum.Num (Multivector f) where
+    (+) = (Algebra.Additive.+)
+    (-) = (Algebra.Additive.-)
+    (*) = (Algebra.Ring.*)
+    negate = NPN.negate
+    abs = scalar . magnitude 
+    fromInteger = Algebra.Ring.fromInteger
+    signum = (\m -> (Clifford.inverse $ scalar $ magnitude m) * m)
 \end{code}
 
 Let's use Newton or Halley iteration to find the principal n-th root :3
