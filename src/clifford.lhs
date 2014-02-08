@@ -59,11 +59,11 @@ The first problem: How to represent basis blades. One way to do it is via genera
 data Blade f = Blade {bScale :: f, bIndices :: [Integer]} 
 instance(Show f) =>  Show (Blade f) where
     --TODO: Do this with HaTeX
-    show  (Blade scale indices) = pref ++  if indices == [] then "" else basis where
+    show  (Blade scale indices) = pref ++  if null indices then "" else basis where
                         pref = show scale
                         basis =  foldr (++) "" textIndices
                         textIndices = map vecced indices
-                        vecced index = "\\vec{e_{" ++ (show index) ++ "}}"
+                        vecced index = "\\vec{e_{" ++ show index ++ "}}"
                                                 
                         
 instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
@@ -143,7 +143,7 @@ Next up: The outer (wedge) product, denoted by $∧$ :3
 bWedge :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
 bWedge x y = bladeNormalForm $ bladeGetGrade k xy
              where
-               k = (grade x) + (grade y)
+               k = grade x + grade y
                xy = bladeMul x y
 
 \end{code}
@@ -223,7 +223,7 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
     signum (BladeSum []) = scalar Algebra.Additive.zero
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
-  (*>) s v = (scalar s) * v
+  (*>) s v = scalar s * v
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
 (/) v d = (Algebra.Field.recip d) *> v
@@ -269,7 +269,7 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
 reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
 
-inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
+inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * reverseMultivector a))
 recip=Clifford.inverse
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
@@ -297,38 +297,38 @@ instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) =
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
+root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
 root n a = converge $ rootIterationsStart n a one
 
-rootIterationsStart ::(Algebra.Field.C f, Ord f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootIterationsStart n a@(BladeSum ((Blade s []):xs)) one = rootHalleysIterations n a g where
+rootIterationsStart ::(Algebra.Field.C f, Ord f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterationsStart n a@(BladeSum ((Blade s []) :xs)) one = rootHalleysIterations n a g where
                      g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a g = rootHalleysIterations n a g
 
 
 rootNewtonIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootNewtonIterations n a initialGuess = iterate xkplus1 initialGuess  where
+rootNewtonIterations n a = iterate xkplus1 where
                      xkplus1 xk = xk + deltaxk xk
-                     deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
-                     oneOverN = scalar $ NPN.recip $ fromInteger $  n
+                     deltaxk xk = oneOverN * ((Clifford.inverse (xk ^ (n - one))* a)  - xk)
+                     oneOverN = scalar $ NPN.recip $ fromInteger n
 
-rootHalleysIterations :: (Algebra.Field.C a, Ord a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
-rootHalleysIterations n a initialGuess = halleysMethod f f' f'' initialGuess where
+rootHalleysIterations :: (Algebra.Field.C a, Ord a, Algebra.Algebraic.C a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
+rootHalleysIterations n a = halleysMethod f f' f'' where
     f x = a - (x^ n)
-    f' x = (fromInteger (-n))*(x^(n-1))
-    f'' x = (fromInteger (-(n*(n-1)))) * (x^(n-2))
+    f' x = fromInteger (-n) * (x^(n-1))
+    f'' x = fromInteger (-(n*(n-1))) * (x^(n-2))
 
-halleysMethod :: (Algebra.Field.C a, Ord a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
-halleysMethod f f' f'' initialGuess = iterate update initialGuess where
-    update x = x - ((numerator x) * (Clifford.inverse (denominator x))) where
-        numerator x = Algebra.Ring.product1 [fromInteger 2, one, f x, f' x]
-        denominator x = (Algebra.Ring.product1 [fromInteger 2, f' x, f' x]) - ((f x) * (f'' x))
+halleysMethod :: (Algebra.Field.C a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
+halleysMethod f f' f'' = iterate update where
+    update x = x - (numerator x * Clifford.inverse (denominator x)) where
+        numerator x = Algebra.Ring.product1 [2, one, f x, f' x]
+        denominator x = Algebra.Ring.product1 [2, f' x, f' x] - (f x * f'' x)
 
 
 secantMethod f x0 x1 = update x1 x0  where
     update xm1 xm2 | xm1 == xm2 = [xm1]
                    | otherwise = if x == xm1 then [x] else x : update x xm1 where
-      x = xm1 - (f xm1) * (xm1-xm2) * Clifford.inverse ((f xm1) - (f xm2))
+      x = xm1 - f xm1 * (xm1-xm2) * Clifford.inverse (f xm1 - f xm2)
 
 \end{code}
 
@@ -348,7 +348,7 @@ Now let's do (slow as fuck probably) numerical integration! :D~! Since this is g
 
 data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
 
-data DynamicSystem f = DynamicSystem {time :: f, coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f, projector :: (DynamicSystem f -> DynamicSystem f)}
+data DynamicSystem f = DynamicSystem {time :: f, coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f, projector :: DynamicSystem f -> DynamicSystem f}
 
 evaluateDerivative s = (dq, dp) where
     dq = map ($ s) ((dqs . energyFunction) s)
