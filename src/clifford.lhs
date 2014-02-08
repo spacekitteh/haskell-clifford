@@ -155,7 +155,7 @@ Now let's do the inner (dot) product, denoted by $⋅$ :D
 bDot :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
 bDot x y = bladeNormalForm $ bladeGetGrade k xy
           where
-            k = Algebra.Absolute.abs $ (grade x) - (grade y)
+            k = Algebra.Absolute.abs $ grade x - grade y
             xy = bladeMul x y
 
 propBladeDotAssociative = Algebra.Laws.associative bDot
@@ -196,8 +196,8 @@ scalar s = s `e` []
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
-    a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
-    zero = BladeSum $ [scalarBlade Algebra.Additive.zero]
+    a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
+    zero = BladeSum [scalarBlade Algebra.Additive.zero]
 \end{code}
 
 Now it is time for the Clifford product. :3
@@ -226,9 +226,9 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
   (*>) s v = scalar s * v
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
-(/) v d = (Algebra.Field.recip d) *> v
+(/) v d = Algebra.Field.recip d *> v
 
-(</) n d = (Clifford.inverse d) * n
+(</) n d = Clifford.inverse d * n
 (/>) n d = n * Clifford.inverse d
 (</>) n d = n /> d
 
@@ -256,7 +256,7 @@ cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
 cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
 expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
-        power k = (Algebra.Ring.^) x k
+        power = (Algebra.Ring.^) x 
         factorial 0 = 1
         factorial 1 = 1
         factorial fac = fac * factorial (fac-1)
@@ -274,7 +274,7 @@ recip=Clifford.inverse
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
 --    toScalar :: (Algebra.Additive.C f) => Multivector f -> f
-    toScalar = bScale . (bladeGetGrade 0) . head . mvTerms
+    toScalar = bScale . bladeGetGrade 0 . head . mvTerms
     toMaybeScalar (BladeSum [Blade s []]) = Just s
     toMaybeScalar (BladeSum []) = Just Algebra.Additive.zero
     toMaybeScalar _ = Nothing
@@ -291,7 +291,7 @@ instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) =
     negate = NPN.negate
     abs = scalar . magnitude 
     fromInteger = Algebra.Ring.fromInteger
-    signum = (\m -> (Clifford.inverse $ scalar $ magnitude m) * m)
+    signum m = Clifford.inverse (scalar $ magnitude m) * m
 \end{code}
 
 Let's use Newton or Halley iteration to find the principal n-th root :3
