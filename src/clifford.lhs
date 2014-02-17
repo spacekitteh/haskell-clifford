@@ -10,6 +10,7 @@
 \author{Sophie Taylor}
 \title{haskell-clifford: A Haskell Clifford algebra library}
 \begin{document}
+
 So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
 
 I am basing the design of this on Issac Trotts' geometric algebra library.\cite{hga}
@@ -21,10 +22,14 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
---  {- LANGUAGE ParallelArrays -}
-{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -optlc-O=3 -O3 #-}
---  {-OPTIONS_GHC -Odph -fvectorise -}
 \end{code}
+%if False
+\begin{code}
+{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 #-}
+--  OPTIONS_GHC -Odph -fvectorise
+--  LANGUAGE ParallelArrays
+\end{code}
+%endif
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
 module Clifford  where
@@ -43,7 +48,6 @@ import Algebra.Module
 import Algebra.Field
 import MathObj.Polynomial.Core
 import System.IO
---import Data.List.Stream
 import Data.List
 import Data.Permute (sort, isEven)
 import Data.List.Ordered
