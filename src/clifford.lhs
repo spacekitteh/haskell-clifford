@@ -7,6 +7,8 @@
 \setmainfont{latinmodern-math.otf}
 \setmathfont{latinmodern-math.otf}
 \usepackage{verbatim}
+\author{Sophie Taylor}
+\title{haskell-clifford: A Haskell Clifford algebra library}
 \begin{document}
 So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
 
@@ -19,6 +21,9 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+-- % {-# LANGUAGE ParallelArrays #-}
+{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -optlc-O=3 -O3 #-}
+-- % {-#OPTIONS_GHC -Odph -fvectorise }
 \end{code}
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
@@ -38,8 +43,9 @@ import Algebra.Module
 import Algebra.Field
 import MathObj.Polynomial.Core
 import System.IO
+--import Data.List.Stream
 import Data.List
-import Data.Permute
+import Data.Permute (sort, isEven)
 import Data.List.Ordered
 import Data.Ord
 import Number.NonNegative
@@ -115,7 +121,7 @@ What is the grade of a blade? Just the number of indices.
 
 \begin{code}
 grade :: Blade f -> Integer
-grade b = fromNumber $ toInteger $ length $ bIndices b
+grade = fromNumber . toInteger . length . bIndices 
 
 bladeIsOfGrade :: Blade f -> Integer -> Bool
 blade `bladeIsOfGrade` k = grade blade == k
