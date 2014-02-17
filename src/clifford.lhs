@@ -21,9 +21,9 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
--- % {-# LANGUAGE ParallelArrays #-}
+--  {- LANGUAGE ParallelArrays -}
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -optlc-O=3 -O3 #-}
--- % {-#OPTIONS_GHC -Odph -fvectorise }
+--  {-OPTIONS_GHC -Odph -fvectorise -}
 \end{code}
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
