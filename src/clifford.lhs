@@ -34,7 +34,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr)
 import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -48,7 +48,7 @@ import Algebra.Module
 import Algebra.Field
 import MathObj.Polynomial.Core
 import System.IO
-import Data.List
+import Data.List.Stream
 import Data.Permute (sort, isEven)
 import Data.List.Ordered
 import Data.Ord
@@ -218,6 +218,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
+
 \end{code}
 
 Clifford numbers have a magnitude and absolute value:
@@ -270,6 +271,12 @@ expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN
         factorial 0 = 1
         factorial 1 = 1
         factorial fac = fac * factorial (fac-1)
+
+expTerms' x = unfoldr gen (one, 0::NPN.Integer) where
+    gen :: (Multivector a, NPN.Integer) -> Maybe (Multivector a, (Multivector a, NPN.Integer))--(x^n, fac n)
+    gen (xn, 0) = Just (one, (one,1))
+    gen (xn, 1) = Just (x, (x, 2))
+    gen (xn, n) = Just ((Algebra.Ring.* xn x) (Clifford./) (fromInteger n), (xn*x, succ n))
 
 dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
