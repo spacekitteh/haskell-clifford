@@ -247,7 +247,7 @@ integratePoly c x = c : zipWith (Clifford./) x progression
 
 
 exp ::(Algebra.Ring.C f, Eq f, Ord f, Algebra.Field.C f)=> Multivector f -> Multivector f
-exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms x
+exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms' x
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
@@ -272,11 +272,13 @@ expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN
         factorial 1 = 1
         factorial fac = fac * factorial (fac-1)
 
+expTerms' :: (Algebra.Field.C a, Ord a) => Multivector a -> [Multivector a]
 expTerms' x = unfoldr gen (one, 0::NPN.Integer) where
-    gen :: (Multivector a, NPN.Integer) -> Maybe (Multivector a, (Multivector a, NPN.Integer))--(x^n, fac n)
     gen (xn, 0) = Just (one, (one,1))
     gen (xn, 1) = Just (x, (x, 2))
-    gen (xn, n) = Just ((Algebra.Ring.* xn x) (Clifford./) (fromInteger n), (xn*x, succ n))
+    gen (xn, n) = Just ((Clifford./)((*) xn x) (fromInteger n), (((*) xn x), succ n))
+
+expTerms'' x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Clifford./ fromInteger n )) (1::NPN.Integer,one)
 
 dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
