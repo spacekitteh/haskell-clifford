@@ -34,7 +34,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl)
 import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -219,6 +219,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
 
+mul = (Algebra.Ring.*)
 \end{code}
 
 Clifford numbers have a magnitude and absolute value:
@@ -247,7 +248,7 @@ integratePoly c x = c : zipWith (Clifford./) x progression
 
 
 exp ::(Algebra.Ring.C f, Eq f, Ord f, Algebra.Field.C f)=> Multivector f -> Multivector f
-exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms' x
+exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms x
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
@@ -266,19 +267,21 @@ sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
 cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
 cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
-expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
-        power = (Algebra.Ring.^) x 
-        factorial 0 = 1
-        factorial 1 = 1
-        factorial fac = fac * factorial (fac-1)
+--naieve and slow
+--expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
+--        power = (Algebra.Ring.^) x 
+--        factorial 0 = 1
+--        factorial 1 = 1
+--        factorial fac = fac * factorial (fac-1)
 
-expTerms' :: (Algebra.Field.C a, Ord a) => Multivector a -> [Multivector a]
-expTerms' x = unfoldr gen (one, 0::NPN.Integer) where
-    gen (xn, 0) = Just (one, (one,1))
-    gen (xn, 1) = Just (x, (x, 2))
-    gen (xn, n) = Just ((Clifford./)((*) xn x) (fromInteger n), (((*) xn x), succ n))
+--does not work
+--expTerms' :: (Algebra.Field.C a, Ord a) => Multivector a -> [Multivector a]
+--expTerms' x = unfoldr gen (one, 0::NPN.Integer) where
+--    gen (xn, 0) = Just (one, (one,1))
+--    gen (xn, 1) = Just (x, (x, 2))
+--    gen (xn, n) = Just ((Clifford./)((*) xn x) (fromInteger n), (((*) xn x), succ n))
 
-expTerms'' x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Clifford./ fromInteger n )) (1::NPN.Integer,one)
+expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Clifford./ fromInteger n )) (1::NPN.Integer,one)
 
 dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
@@ -340,8 +343,8 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
 halleysMethod :: (Algebra.Field.C a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
 halleysMethod f f' f'' = iterate update where
     update x = x - (numerator x * Clifford.inverse (denominator x)) where
-        numerator x = Algebra.Ring.product1 [2, one, f x, f' x]
-        denominator x = Algebra.Ring.product1 [2, f' x, f' x] - (f x * f'' x)
+        numerator x = foldl (*) 2 [f x, f' x]
+        denominator x = foldl (*) 2 [f' x, f' x] - (f x * f'' x)
 
 
 secantMethod f x0 x1 = update x1 x0  where
