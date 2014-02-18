@@ -21,6 +21,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 %if False
@@ -34,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1)
 import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -46,19 +47,23 @@ import Algebra.Transcendental
 import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
-import MathObj.Polynomial.Core
+import MathObj.Polynomial.Core (progression)
 import System.IO
 import Data.List.Stream
 import Data.Permute (sort, isEven)
 import Data.List.Ordered
 import Data.Ord
+import Data.Maybe
 import Number.NonNegative
+import Debug.Trace
 import NumericPrelude.Numeric (sum)
+import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
-import Math.Sequence.Converge
-import Number.Ratio
+import Math.Sequence.Converge (convergeBy)
+--import Number.Ratio
 import qualified GHC.Num as PNum
+import Control.Lens hiding (indices)
 \end{code}
 
 
@@ -66,7 +71,10 @@ The first problem: How to represent basis blades. One way to do it is via genera
 
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
-data Blade f = Blade {bScale :: f, bIndices :: [Integer]} 
+data Blade f = Blade {_scale :: f, _indices :: [Integer]} 
+makeLenses ''Blade
+bScale b =  b^.scale
+bIndices b = b^.indices
 instance(Show f) =>  Show (Blade f) where
     --TODO: Do this with HaTeX
     show  (Blade scale indices) = pref ++  if null indices then "" else basis where
@@ -91,9 +99,9 @@ scalarBlade d = Blade d []
 zeroBlade :: (Algebra.Additive.C f) => Blade f
 zeroBlade = scalarBlade Algebra.Additive.zero
 
-bladeNonZero b = bScale b /= Algebra.Additive.zero
+bladeNonZero b = b^.scale /= Algebra.Additive.zero
 
-bladeNegate b = Blade (Algebra.Additive.negate bScale b) (bIndices b)
+bladeNegate b = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)
 
 \end{code}
 
@@ -125,7 +133,7 @@ What is the grade of a blade? Just the number of indices.
 
 \begin{code}
 grade :: Blade f -> Integer
-grade = fromNumber . toInteger . length . bIndices 
+grade = fromNumber.toInteger.length.bIndices 
 
 bladeIsOfGrade :: Blade f -> Integer -> Bool
 blade `bladeIsOfGrade` k = grade blade == k
@@ -185,11 +193,11 @@ instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving (Show, Eq)
-
+data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq)
+makeLenses ''Multivector
 mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
-    resultant = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
-
+    resultant = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
+mvTerms m = m^.terms
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
 addLikeTerms [a] = [a]
@@ -237,6 +245,8 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
 instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
   (*>) s v = scalar s * v
 
+
+
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
 (/) v d = Algebra.Field.recip d *> v
 
@@ -246,9 +256,20 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
 
 integratePoly c x = c : zipWith (Clifford./) x progression
 
+--converge :: (Eq f, Show f) => [f] -> f
+converge [] = error "converge: empty list"
+converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs) 
+    where
+      empty = error "converge: error in implmentation"
+      
+      checkPeriodic (a:b:c:_)
+          | (trace ("Converging at " ++ show a) a) == b = Just a
+          | a == c = Just a
+      checkPeriodic _ = Nothing
 
-exp ::(Algebra.Ring.C f, Eq f, Ord f, Algebra.Field.C f)=> Multivector f -> Multivector f
-exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms x
+--exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
+exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
+exp x = trace ("Computing exponential of " ++ show x) converge $ scanl (+) Algebra.Additive.zero $ expTerms x
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
@@ -280,6 +301,7 @@ cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 --    gen (xn, 0) = Just (one, (one,1))
 --    gen (xn, 1) = Just (x, (x, 2))
 --    gen (xn, n) = Just ((Clifford./)((*) xn x) (fromInteger n), (((*) xn x), succ n))
+
 
 expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Clifford./ fromInteger n )) (1::NPN.Integer,one)
 
@@ -314,15 +336,17 @@ instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) =
     abs = scalar . magnitude 
     fromInteger = Algebra.Ring.fromInteger
     signum m = Clifford.inverse (scalar $ magnitude m) * m
+
+
 \end{code}
 
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
+root ::(Algebra.Field.C f, Show f, Eq f, Algebra.Ring.C f, Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
 root n a = converge $ rootIterationsStart n a one
 
-rootIterationsStart ::(Algebra.Field.C f, Ord f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterationsStart ::(Algebra.Field.C f, Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
 rootIterationsStart n a@(BladeSum ((Blade s []) :xs)) one = rootHalleysIterations n a g where
                      g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a g = rootHalleysIterations n a g
@@ -334,17 +358,17 @@ rootNewtonIterations n a = iterate xkplus1 where
                      deltaxk xk = oneOverN * ((Clifford.inverse (xk ^ (n - one))* a)  - xk)
                      oneOverN = scalar $ NPN.recip $ fromInteger n
 
-rootHalleysIterations :: (Algebra.Field.C a, Ord a, Algebra.Algebraic.C a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
+rootHalleysIterations :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
 rootHalleysIterations n a = halleysMethod f f' f'' where
     f x = a - (x^ n)
     f' x = fromInteger (-n) * (x^(n-1))
     f'' x = fromInteger (-(n*(n-1))) * (x^(n-2))
 
-halleysMethod :: (Algebra.Field.C a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
+halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
 halleysMethod f f' f'' = iterate update where
-    update x = x - (numerator x * Clifford.inverse (denominator x)) where
-        numerator x = foldl (*) 2 [f x, f' x]
-        denominator x = foldl (*) 2 [f' x, f' x] - (f x * f'' x)
+    update x = (trace ("Halley iteration at " ++ show x) x) - (numerator x * Clifford.inverse (denominator x)) where
+        numerator x = foldl1 (*) [2, f x, f' x]
+        denominator x = foldl1 (*) [2, f' x, f' x] - (f x * f'' x)
 
 
 secantMethod f x0 x1 = update x1 x0  where
@@ -352,13 +376,14 @@ secantMethod f x0 x1 = update x1 x0  where
                    | otherwise = if x == xm1 then [x] else x : update x xm1 where
       x = xm1 - f xm1 * (xm1-xm2) * Clifford.inverse (f xm1 - f xm2)
 
+
 \end{code}
 
 Now let's try logarithms by fixed point iteration. It's gonna be slow, but whatever!
 
 \begin{code}
 
-log a = converge $ halleysMethod f f' f'' $ Clifford.root 3 a where
+log a = converge $ halleysMethod f f' f'' one  where
     f x = a - Clifford.exp x
     f' x = NPN.negate $ Clifford.exp x
     f'' = f'
