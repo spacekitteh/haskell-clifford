@@ -310,14 +310,13 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 (∧) = wedge
 (⋅) = dot
 
-reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
-reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
+reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
+reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
 inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * reverseMultivector a))
 recip=Clifford.inverse
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
---    toScalar :: (Algebra.Additive.C f) => Multivector f -> f
     toScalar = bScale . bladeGetGrade 0 . head . mvTerms
     toMaybeScalar (BladeSum [Blade s []]) = Just s
     toMaybeScalar (BladeSum []) = Just Algebra.Additive.zero
