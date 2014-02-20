@@ -36,7 +36,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 module Clifford  where
 
 import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1)
-import Algebra.Laws
+--import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
 import Algebra.Additive
@@ -176,7 +176,7 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
             k = Algebra.Absolute.abs $ grade x - grade y
             xy = bladeMul x y
 
-propBladeDotAssociative = Algebra.Laws.associative bDot
+--propBladeDotAssociative = Algebra.Laws.associative bDot
 
 \end{code}
 
@@ -196,8 +196,28 @@ A multivector is nothing but a linear combination of basis blades.
 data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq)
 makeLenses ''Multivector
 mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
-    resultant = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
+    resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
 mvTerms m = m^.terms
+
+addLikeTerms' = groupLikeTerms&sumLikeTerms
+
+groupLikeTerms ::Eq f =>  [Blade f] -> [[Blade f]]
+groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
+
+compensatedSum :: (Algebra.Additive.C f) => [f] -> f
+compensatedSum xs = kahan zero zero xs where
+    kahan s _ [] = s
+    kahan s c (x:xs) = 
+        let y = x - c
+            t = s + y
+        in kahan t ((t-s)-y) xs
+
+--things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
+--                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
+
+sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
+sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum & (\result -> Blade result ((head sameIxs) & bIndices))) blades
+
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
 addLikeTerms [a] = [a]
