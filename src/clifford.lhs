@@ -201,6 +201,7 @@ mvTerms m = m^.terms
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
 addLikeTerms [a] = [a]
+--should detect a run of like terms of 3 or more and then use compensated summation
 addLikeTerms (x:y:rest) | bIndices x == bIndices y =
                             addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
                         | otherwise = x : addLikeTerms (y:rest)
