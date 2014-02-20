@@ -199,7 +199,7 @@ mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additiv
     resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
 mvTerms m = m^.terms
 
-addLikeTerms' = groupLikeTerms&sumLikeTerms
+addLikeTerms' = sumLikeTerms . groupLikeTerms
 
 groupLikeTerms ::Eq f =>  [Blade f] -> [[Blade f]]
 groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
@@ -212,6 +212,16 @@ compensatedSum xs = kahan zero zero xs where
             t = s + y
         in kahan t ((t-s)-y) xs
 
+--use this to sum taylor series et al with converge
+compensatedRunningSum :: (Algebra.Additive.C f) => [f] -> [f]
+compensatedRunningSum xs= map fst $ scanl kahanSum (zero,zero) xs where
+--    kahanSum :: (f,f) -> f -> (f,f) --(sum,c),b,  (result,newc)
+    kahanSum (s,c) b = (t,newc) where
+        y = b - c
+        t = s + y
+        newc = (t - s) - y
+            
+--kahanSum a m = with m $ \b c -> let y = a - c; t = b + y in (t, ((t-b)-y))
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
 --                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
 
@@ -290,7 +300,7 @@ converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs)
 
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
 exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
-exp x = trace ("Computing exponential of " ++ show x) converge $ scanl (+) Algebra.Additive.zero $ expTerms x
+exp x = trace ("Computing exponential of " ++ show x) converge $ compensatedRunningSum $ expTerms x
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
