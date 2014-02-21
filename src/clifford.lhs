@@ -258,6 +258,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
 
+two = fromInteger 2
 mul = (Algebra.Ring.*)
 \end{code}
 
@@ -298,9 +299,30 @@ converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs)
           | a == c = Just a
       checkPeriodic _ = Nothing
 
+
+aitkensAcceleration [] = []
+aitkensAcceleration a@(xn:[]) = a
+aitkensAcceleration a@(xn:xnp1:[]) = a
+aitkensAcceleration a@(xn:xnp1:xnp2:[]) = a
+aitkensAcceleration (xn:xnp1:xnp2:xs) | xn == xnp1 = [xnp1]
+                                      | xn == xnp2 = [xnp2]
+                                      | otherwise = xn - (((dxn) ^ 2) /> ddxn) : aitkensAcceleration (xnp1:xnp2:xs) where
+    dxn = compensatedSum [xnp1,negate xn]
+    ddxn =compensatedSum [xn, negate (two *  xnp1), xnp2]
+
+shanksTransformation [] = []
+shanksTransformation a@(xnm1:[]) = a
+shanksTransformation a@(xnm1:xn:[]) = a
+shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
+                                       | xnm1 == xnp1 = [xnm1]
+                                       | otherwise = numerator /> denominator : shanksTransformation (xn:xnp1:xs) where
+                                       numerator = compensatedSum [xnp1*xnm1, negate (xn^2)]
+                                       denominator = compensatedSum [xnp1, (-2)*xn, xnm1]
+
+
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
 exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
-exp x = trace ("Computing exponential of " ++ show x) converge $ compensatedRunningSum $ expTerms x
+exp x = trace ("Computing exponential of " ++ show x) converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms x
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
@@ -397,8 +419,11 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
 halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
 halleysMethod f f' f'' = iterate update where
     update x = (trace ("Halley iteration at " ++ show x) x) - (numerator x * Clifford.inverse (denominator x)) where
-        numerator x = foldl1 (*) [2, f x, f' x]
-        denominator x = foldl1 (*) [2, f' x, f' x] - (f x * f'' x)
+        numerator x = foldl1 (*) [2, fx, dfx]
+        denominator x = foldl1 (*) [2, dfx, dfx] - (fx * ddfx)
+        fx = f x
+        dfx = f' x
+        ddfx = f'' x
 
 
 secantMethod f x0 x1 = update x1 x0  where
@@ -423,13 +448,16 @@ Now let's do (slow as fuck probably) numerical integration! :D~! Since this is g
 
 \begin{code}
 
-data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
+data EnergyMethod f = Hamiltonian{ _dqs :: [DynamicSystem f -> Multivector f], _dps :: [DynamicSystem f -> Multivector f]}
 
-data DynamicSystem f = DynamicSystem {time :: f, coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f, projector :: DynamicSystem f -> DynamicSystem f}
+data DynamicSystem f = DynamicSystem {_time :: f, coordinates :: [Multivector f], _momenta :: [Multivector f], _energyFunction :: EnergyMethod f, _projector :: DynamicSystem f -> DynamicSystem f}
 
-evaluateDerivative s = (dq, dp) where
-    dq = map ($ s) ((dqs . energyFunction) s)
-    dp = map ($ s) ((dps . energyFunction) s)
+makeLenses ''EnergyMethod
+makeLenses ''DynamicSystem
+
+--evaluateDerivative s = (dq, dp) where
+--    dq = s&energyFunction.dqs.traverse--map ($ s) ((dqs . energyFunction) s)
+--    dp = map ($ s) ((dps . energyFunction) s)
 
 --add function to project to allowable configuration space after each update step 
 --use secant or whatever method for fixed point iteration for implicit parts of runge kutta
