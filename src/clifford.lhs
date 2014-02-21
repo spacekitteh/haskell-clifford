@@ -55,7 +55,7 @@ import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
 import Number.NonNegative
---import Debug.Trace
+import Debug.Trace
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
@@ -66,7 +66,7 @@ import Control.DeepSeq
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
 
-trace _ a = a
+--trace _ a = a
 
 \end{code}
 
@@ -238,24 +238,14 @@ sumList xs = mvNormalForm $ BladeSum $ Data.List.Stream.concat $ map mvTerms xs
 sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
 
-addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
-addLikeTerms [] = []
-addLikeTerms [a] = [a]
---should detect a run of like terms of 3 or more and then use compensated summation
-addLikeTerms (x:y:rest) | bIndices x == bIndices y =
-                            addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
-                        | otherwise = x : addLikeTerms (y:rest)
-
 --Constructs a multivector from a scaled blade.
 e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 
 scalar s = s `e` []
 
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f) where
---    deepseq a = (BladeSum $ deepseq.mvTerms a)  `seq` ()
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade f) where
---    deepseq a = Blade (deepseq . bScale a) (deepseq . bIndices a)
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f)
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade f)
 instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
@@ -268,12 +258,12 @@ Now it is time for the Clifford product. :3
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
-    BladeSum a * [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
+    a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
 
-two = fromInteger 2
+two = 2
 mul = (Algebra.Ring.*)
 \end{code}
 
@@ -321,7 +311,7 @@ aitkensAcceleration a@(xn:xnp1:[]) = a
 aitkensAcceleration a@(xn:xnp1:xnp2:[]) = a
 aitkensAcceleration (xn:xnp1:xnp2:xs) | xn == xnp1 = [xnp1]
                                       | xn == xnp2 = [xnp2]
-                                      | otherwise = xn - (((dxn) ^ 2) /> ddxn) : aitkensAcceleration (xnp1:xnp2:xs) where
+                                      | otherwise = xn - ((dxn ^ 2) /> ddxn) : aitkensAcceleration (xnp1:xnp2:xs) where
     dxn = sumList [xnp1,negate xn]
     ddxn = sumList [xn,  (-2) *  xnp1, xnp2]
 
@@ -330,7 +320,8 @@ shanksTransformation a@(xnm1:[]) = a
 shanksTransformation a@(xnm1:xn:[]) = a
 shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
                                        | xnm1 == xnp1 = [xnm1]
-                                       | otherwise = numerator /> denominator : shanksTransformation (xn:xnp1:xs) where
+                                       | denominator == zero = [xnp1]
+                                       | otherwise = numerator />  denominator : shanksTransformation (xn:xnp1:xs) where
                                        numerator = sumList [xnp1*xnm1, negate (xn^2)]
                                        denominator = sumList [xnp1, (-2)*xn, xnm1] -- is compensatedSum faster than sumList?
 
@@ -351,9 +342,9 @@ seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
 
 
-sin x = converge $ scanl (+) Algebra.Additive.zero $ sinTerms x
+sin x = converge $ shanksTransformation $ compensatedRunningSum $ sinTerms x
 sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
-cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
+cos x = converge $ shanksTransformation $ compensatedRunningSum (Algebra.Ring.one : cosTerms x)
 cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
 expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Clifford./ fromInteger n )) (1::NPN.Integer,one)
@@ -366,7 +357,7 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
-inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * reverseMultivector a))
+inverse a = reverseMultivector a Clifford./ (bScale $ head $ mvTerms (a * reverseMultivector a))
 recip=Clifford.inverse
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
