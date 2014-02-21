@@ -55,15 +55,19 @@ import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
 import Number.NonNegative
-import Debug.Trace
+--import Debug.Trace
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge (convergeBy)
+import Control.DeepSeq 
 --import Number.Ratio
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
+
+trace _ a = a
+
 \end{code}
 
 
@@ -103,6 +107,8 @@ bladeNonZero b = b^.scale /= Algebra.Additive.zero
 
 bladeNegate b = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)
 
+bladeScaleLeft s (Blade f ind) = Blade (s * f) ind
+bladeScaleRight s (Blade f ind) = Blade (f * s) ind
 \end{code}
 
 However, the plain data constructor should never be used, for it doesn't order them by default. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative. Additionally, since $\vec{e}_k^2 = 1$, pairs of them should be removed.
@@ -194,6 +200,7 @@ A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
 data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq)
+
 makeLenses ''Multivector
 mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
     resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
@@ -204,8 +211,8 @@ addLikeTerms' = sumLikeTerms . groupLikeTerms
 groupLikeTerms ::Eq f =>  [Blade f] -> [[Blade f]]
 groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
 
-compensatedSum :: (Algebra.Additive.C f) => [f] -> f
-compensatedSum xs = kahan zero zero xs where
+compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
+compensatedSum' xs = kahan zero zero xs where
     kahan s _ [] = s
     kahan s c (x:xs) = 
         let y = x - c
@@ -213,8 +220,8 @@ compensatedSum xs = kahan zero zero xs where
         in kahan t ((t-s)-y) xs
 
 --use this to sum taylor series et al with converge
-compensatedRunningSum :: (Algebra.Additive.C f) => [f] -> [f]
-compensatedRunningSum xs= map fst $ scanl kahanSum (zero,zero) xs where
+--compensatedRunningSum :: (Algebra.Additive.C f) => [f] -> [f]
+compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,zero) xs where
 --    kahanSum :: (f,f) -> f -> (f,f) --(sum,c),b,  (result,newc)
     kahanSum (s,c) b = (t,newc) where
         y = b - c
@@ -225,8 +232,11 @@ compensatedRunningSum xs= map fst $ scanl kahanSum (zero,zero) xs where
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
 --                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
 
+
+sumList xs = mvNormalForm $ BladeSum $ Data.List.Stream.concat $ map mvTerms xs
+
 sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
-sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum & (\result -> Blade result ((head sameIxs) & bIndices))) blades
+sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
 
 addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
 addLikeTerms [] = []
@@ -242,7 +252,10 @@ s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 
 scalar s = s `e` []
 
-
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f) where
+--    deepseq a = (BladeSum $ deepseq.mvTerms a)  `seq` ()
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade f) where
+--    deepseq a = Blade (deepseq . bScale a) (deepseq . bIndices a)
 instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
@@ -254,6 +267,8 @@ Now it is time for the Clifford product. :3
 \begin{code}
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
+    BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
+    BladeSum a * [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
@@ -307,8 +322,8 @@ aitkensAcceleration a@(xn:xnp1:xnp2:[]) = a
 aitkensAcceleration (xn:xnp1:xnp2:xs) | xn == xnp1 = [xnp1]
                                       | xn == xnp2 = [xnp2]
                                       | otherwise = xn - (((dxn) ^ 2) /> ddxn) : aitkensAcceleration (xnp1:xnp2:xs) where
-    dxn = compensatedSum [xnp1,negate xn]
-    ddxn =compensatedSum [xn, negate (two *  xnp1), xnp2]
+    dxn = sumList [xnp1,negate xn]
+    ddxn = sumList [xn,  (-2) *  xnp1, xnp2]
 
 shanksTransformation [] = []
 shanksTransformation a@(xnm1:[]) = a
@@ -316,13 +331,13 @@ shanksTransformation a@(xnm1:xn:[]) = a
 shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
                                        | xnm1 == xnp1 = [xnm1]
                                        | otherwise = numerator /> denominator : shanksTransformation (xn:xnp1:xs) where
-                                       numerator = compensatedSum [xnp1*xnm1, negate (xn^2)]
-                                       denominator = compensatedSum [xnp1, (-2)*xn, xnm1]
+                                       numerator = sumList [xnp1*xnm1, negate (xn^2)]
+                                       denominator = sumList [xnp1, (-2)*xn, xnm1] -- is compensatedSum faster than sumList?
 
 
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
 exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
-exp x = trace ("Computing exponential of " ++ show x) converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms x
+exp x = trace ("Computing exponential of " ++ show x) converge $ shanksTransformation.shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms x
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
@@ -340,21 +355,6 @@ sin x = converge $ scanl (+) Algebra.Additive.zero $ sinTerms x
 sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
 cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
 cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
-
---naieve and slow
---expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
---        power = (Algebra.Ring.^) x 
---        factorial 0 = 1
---        factorial 1 = 1
---        factorial fac = fac * factorial (fac-1)
-
---does not work
---expTerms' :: (Algebra.Field.C a, Ord a) => Multivector a -> [Multivector a]
---expTerms' x = unfoldr gen (one, 0::NPN.Integer) where
---    gen (xn, 0) = Just (one, (one,1))
---    gen (xn, 1) = Just (x, (x, 2))
---    gen (xn, n) = Just ((Clifford./)((*) xn x) (fromInteger n), (((*) xn x), succ n))
-
 
 expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Clifford./ fromInteger n )) (1::NPN.Integer,one)
 
@@ -391,7 +391,7 @@ instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) =
 
 
 \end{code}
-
+ 
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
