@@ -18,7 +18,7 @@ I am basing the design of this on Issac Trotts' geometric algebra library.\cite{
 Let us  begin. We are going to use the Numeric Prelude because it is (shockingly) nicer for numeric stuff.
 
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude, FlexibleContexts #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -263,7 +263,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
 
-two = 2
+two = fromInteger 2
 mul = (Algebra.Ring.*)
 \end{code}
 
@@ -272,7 +272,7 @@ Clifford numbers have a magnitude and absolute value:
 \begin{code}
 
 magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
-magnitude mv = sqrt $ NumericPrelude.Numeric.sum $ map (\b -> (Algebra.Ring.^) (bScale b) 2) $ mvTerms mv
+magnitude = sqrt . compensatedSum' . map (\b -> (bScale b)^ 2) . mvTerms
 
 instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolute.C (Multivector f) where
     abs v =  magnitude v `e` []
@@ -321,9 +321,10 @@ shanksTransformation a@(xnm1:xn:[]) = a
 shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
                                        | xnm1 == xnp1 = [xnm1]
                                        | denominator == zero = [xnp1]
-                                       | otherwise = numerator />  denominator : shanksTransformation (xn:xnp1:xs) where
+                                       | otherwise = trace ("Shanks transformation input = " ++ show xn ++ "\nShanks transformation output = " ++ show out) out:shanksTransformation (xn:xnp1:xs) where
+                                       out = numerator />  denominator 
                                        numerator = sumList [xnp1*xnm1, negate (xn^2)]
-                                       denominator = sumList [xnp1, (-2)*xn, xnm1] -- is compensatedSum faster than sumList?
+                                       denominator = sumList [xnp1, (-2)*xn, xnm1] 
 
 
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
@@ -334,9 +335,9 @@ takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
                      [] -> []
 
-cosh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ expTerms x
+cosh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ expTerms x
 
-sinh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ tail $ expTerms x
+sinh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
@@ -452,6 +453,18 @@ makeLenses ''DynamicSystem
 
 --add function to project to allowable configuration space after each update step 
 --use secant or whatever method for fixed point iteration for implicit parts of runge kutta
+
+
+rk4Classical :: (Ord a, Algebra.Algebraic.C a) =>  stateType -> a -> (stateType->stateType) -> ([Multivector a] -> stateType) -> (stateType -> [Multivector a]) -> stateType
+rk4Classical state h f project unproject = project $ newState where
+    update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] / Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
+    newState = map (uncurry (+)) $ Data.List.Stream.zip state' update
+    state' = unproject state
+    evalDerivatives x = unproject $ f $ project x
+    k1 = map (h *>) $ evalDerivatives state'
+    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k1)
+    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k2)
+    k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' k3
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
