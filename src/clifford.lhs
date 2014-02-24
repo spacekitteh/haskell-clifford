@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -55,7 +55,7 @@ import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
 import Number.NonNegative
-import Debug.Trace
+
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
@@ -65,7 +65,7 @@ import Control.DeepSeq
 --import Number.Ratio
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
-
+import Debug.Trace
 --trace _ a = a
 
 \end{code}
@@ -126,7 +126,7 @@ bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
         where
              numOfIndices = length indices
              (sorted, perm) = Data.Permute.sort numOfIndices indices
-             scale' = if isEven perm then scale else Algebra.Additive.negate scale
+             scale' = if isEven perm then scale else negate scale
              uniqueSorted = removeDupPairs sorted
                             where
                               removeDupPairs [] = []
@@ -156,7 +156,12 @@ First up for operations: Blade multiplication. This is no more than assembling o
 \begin{code}
 bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
 bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
-
+multiplyBladeList :: Algebra.Ring.C f => [Blade f] -> Blade f
+multiplyBladeList [] = error "Empty blade list!"
+multiplyBladeList (a:[]) = a
+multiplyBladeList a = bladeNormalForm $ Blade scale indices where
+    indices = concat $ map bIndices a
+    scale = foldl1 (*) (map bScale a)
 
 
 \end{code}
@@ -222,21 +227,45 @@ compensatedSum' xs = kahan zero zero xs where
 --use this to sum taylor series et al with converge
 --compensatedRunningSum :: (Algebra.Additive.C f) => [f] -> [f]
 compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,zero) xs where
---    kahanSum :: (f,f) -> f -> (f,f) --(sum,c),b,  (result,newc)
     kahanSum (s,c) b = (t,newc) where
         y = b - c
         t = s + y
         newc = (t - s) - y
             
---kahanSum a m = with m $ \b c -> let y = a - c; t = b + y in (t, ((t-b)-y))
+--multiplyAdd a b c = a*b + c
+--twoProduct a b = (x,y) where
+--    x = a*b
+--z    y = multiplyAdd a b (negate x)
+
+--multiplyList [] = []
+--multiplyList a@(x:[])=a
+--multiplyList (a:b:xs) = loop a (b:xs) zero where
+--  loop pm [] ei = pm+ei
+--  loop pm1 (ai:remaining) eim1= loop pi remaining ei where
+--      (pi, pii) = twoProduct pm1 ai
+--      ei = multiplyAdd eim1 ai pii
+
+
+multiplyOutBlades :: Algebra.Ring.C a => [Blade a] -> [Blade a] -> [Blade a]
+multiplyOutBlades x y = [bladeMul l r | l <-x, r <- y]
+
+--multiplyList :: Algebra.Ring.C t => [Multivector t] -> Multivector t
+multiplyList [] = error "Empty list"
+multiplyList a@(x:[]) = x
+multiplyList l = mvNormalForm $ BladeSum listOfBlades where
+    expandedBlades :: Algebra.Ring.C a => [[Blade a]] -> [Blade a]
+    expandedBlades a = Data.List.Stream.foldl1 (multiplyOutBlades) a
+    listOfBlades = expandedBlades $ map mvTerms l
+
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
 --                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
-
 
 sumList xs = mvNormalForm $ BladeSum $ Data.List.Stream.concat $ map mvTerms xs
 
 sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
+
+
 
 --Constructs a multivector from a scaled blade.
 e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
@@ -262,6 +291,9 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i
+    a ^ 0 = one
+    a ^ 1 = a
+    a ^ n = multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
 
 two = fromInteger 2
 mul = (Algebra.Ring.*)
@@ -271,7 +303,7 @@ Clifford numbers have a magnitude and absolute value:
 
 \begin{code}
 
-magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
+--magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
 magnitude = sqrt . compensatedSum' . map (\b -> (bScale b)^ 2) . mvTerms
 
 instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolute.C (Multivector f) where
@@ -285,7 +317,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
 
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
-(/) v d = Algebra.Field.recip d *> v
+(/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
 
 (</) n d = Clifford.inverse d * n
 (/>) n d = n * Clifford.inverse d
@@ -298,7 +330,6 @@ converge [] = error "converge: empty list"
 converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs) 
     where
       empty = error "converge: error in implmentation"
-      
       checkPeriodic (a:b:c:_)
           | (trace ("Converging at " ++ show a) a) == b = Just a
           | a == c = Just a
@@ -329,7 +360,17 @@ shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
 
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
 exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
-exp x = trace ("Computing exponential of " ++ show x) converge $ shanksTransformation.shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms x
+exp x = trace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
+    --todo: compute a ^ p via a^n where n = floor p then multiply remaining power
+    expMag = Algebra.Transcendental.exp mag
+    expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
+    convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
+    mag = trace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
+    scaled = let val = (Clifford./) x mag in trace ("In exponential, scaled is" ++ show val) val
+
+
+
+
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
@@ -411,8 +452,8 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
 halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
 halleysMethod f f' f'' = iterate update where
     update x = (trace ("Halley iteration at " ++ show x) x) - (numerator x * Clifford.inverse (denominator x)) where
-        numerator x = foldl1 (*) [2, fx, dfx]
-        denominator x = foldl1 (*) [2, dfx, dfx] - (fx * ddfx)
+        numerator x = multiplyList [2, fx, dfx]
+        denominator x = multiplyList [2, dfx, dfx] - (fx * ddfx)
         fx = f x
         dfx = f' x
         ddfx = f'' x
@@ -430,10 +471,17 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 
 \begin{code}
 
-log a = converge $ halleysMethod f f' f'' one  where
-    f x = a - Clifford.exp x
-    f' x = NPN.negate $ Clifford.exp x
-    f'' = f'
+normalised a = a * (scalar $ NPN.recip $ magnitude a)
+--fancyLog :: (Algebra.Transcendental.C f) => Multivector f -> Multivector f
+
+log (BladeSum [Blade s []]) = scalar $ NPN.log s
+log a = (scalar (NPN.log mag)) + log' scaled where
+    scaled = normalised a
+    mag = magnitude a
+    log' a = converge $ halleysMethod f f' f'' (one `e` [1,2])  where
+         f x = a - Clifford.exp x
+         f' x = NPN.negate $ Clifford.exp x
+         f'' = f'
 \end{code}
 
 Now let's do (slow as fuck probably) numerical integration! :D~! Since this is gonna be used for physical applications, it's we're gonna start off with a Hamiltonian structure and then a symplectic integrator.
@@ -465,6 +513,8 @@ rk4Classical state h f project unproject = project $ newState where
     k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k1)
     k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k2)
     k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' k3
+
+rk4ClassicalList state h f = rk4Classical state h f id id
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
