@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!))
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -505,8 +505,10 @@ makeLenses ''EnergyMethod
 makeLenses ''DynamicSystem
 
 --evaluateDerivative s = (dq, dp) where
---    dq = s&energyFunction.dqs.traverse--map ($ s) ((dqs . energyFunction) s)
---    dp = map ($ s) ((dps . energyFunction) s)
+--    dq = (s&energyFunction.dqs) -- s
+--    dp = (s&energyFunction.dps) -- s
+--    dq = map ($ s) ((dqs $ energyFunction) s) --s&energyFunction.dqs.traverse--map ($ s) ((dqs . energyFunction) s)
+--    dp = map ($ s) ((dps $ energyFunction) s)
 
 --add function to project to allowable configuration space after each update step 
 --use secant or whatever method for fixed point iteration for implicit parts of runge kutta
@@ -519,13 +521,27 @@ rk4Classical state h f project unproject = project $ newState where
     state' = unproject state
     evalDerivatives x = unproject $ f $ project x
     k1 = map (h*>) $ evalDerivatives state'
-    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k1)
-    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k2)
-    k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' k3
+    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (\x -> x / two) k1)
+    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (\x -> x / two) k2)
+    k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' k3
 
 rk4ClassicalList state h f = rk4Classical state h f id id
 
 
+data ButcherTableau f = ButcherTableau {_a :: [f], _b :: [[f]], _c :: [[f]]}
+makeLenses ''ButcherTableau
+genericRKMethod tableau iterator = rkMethod where
+    s = tableau^.a & length 
+    aCoefficients = tableau^.a
+    rkMethod state h f project unproject = project $ newState where
+        state' = unproject state
+        newState = undefined
+        evalDerivatives x = unproject $ f $ project x
+        k 0 = zero
+        -- add support for implicit b's
+        k n = (h*>) evalDerivatives . map (uncurry (+)) $ zip state' (map (\x -> a *> x) (k (n-1))) where
+            a = aCoefficients !! (n-1)
+                                                                  
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
