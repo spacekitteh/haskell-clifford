@@ -62,11 +62,12 @@ import qualified NumericPrelude.Numeric as NPN
 import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge (convergeBy)
 import Control.DeepSeq 
---import Number.Ratio
+import Number.Ratio hiding (scale)
+import Algebra.ToRational
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
-import Debug.Trace
---trace _ a = a
+--import Debug.Trace
+trace _ a = a
 
 \end{code}
 
@@ -270,7 +271,6 @@ sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\
 --Constructs a multivector from a scaled blade.
 e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
-
 scalar s = s `e` []
 
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f)
@@ -290,10 +290,12 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
-    fromInteger i = scalar $ Algebra.Ring.fromInteger i
+    fromInteger i = scalar $ Algebra.Ring.fromInteger i    
     a ^ 0 = one
     a ^ 1 = a
-    a ^ n = multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
+    a ^ 2 = a * a
+    --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
+    a ^ n  =  multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
 
 two = fromInteger 2
 mul = (Algebra.Ring.*)
@@ -428,12 +430,13 @@ instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) =
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root ::(Algebra.Field.C f, Show f, Eq f, Algebra.Ring.C f, Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
+root ::(Show f, Eq f,Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
+root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
 root n a = converge $ rootIterationsStart n a one
 
 rootIterationsStart ::(Algebra.Field.C f, Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
 rootIterationsStart n a@(BladeSum ((Blade s []) :xs)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
+                     g = if s >= NPN.zero then one else (Algebra.Ring.one `e` [1,2])--BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a g = rootHalleysIterations n a g
 
 
@@ -445,9 +448,16 @@ rootNewtonIterations n a = iterate xkplus1 where
 
 rootHalleysIterations :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
 rootHalleysIterations n a = halleysMethod f f' f'' where
-    f x = a - (x^ n)
+    f x = a - (x^n)
     f' x = fromInteger (-n) * (x^(n-1))
     f'' x = fromInteger (-(n*(n-1))) * (x^(n-2))
+
+
+pow a p = (a ^ up) Clifford./> (Clifford.root down a) where
+    ratio = toRational p
+    up = numerator ratio
+    down = denominator ratio
+
 
 halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
 halleysMethod f f' f'' = iterate update where
@@ -472,13 +482,12 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 \begin{code}
 
 normalised a = a * (scalar $ NPN.recip $ magnitude a)
---fancyLog :: (Algebra.Transcendental.C f) => Multivector f -> Multivector f
 
 log (BladeSum [Blade s []]) = scalar $ NPN.log s
 log a = (scalar (NPN.log mag)) + log' scaled where
     scaled = normalised a
     mag = magnitude a
-    log' a = converge $ halleysMethod f f' f'' (one `e` [1,2])  where
+    log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
          f x = a - Clifford.exp x
          f' x = NPN.negate $ Clifford.exp x
          f'' = f'
@@ -509,12 +518,14 @@ rk4Classical state h f project unproject = project $ newState where
     newState = map (uncurry (+)) $ Data.List.Stream.zip state' update
     state' = unproject state
     evalDerivatives x = unproject $ f $ project x
-    k1 = map (h *>) $ evalDerivatives state'
+    k1 = map (h*>) $ evalDerivatives state'
     k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k1)
     k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' (map (\x -> x / two) k2)
     k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ Data.List.Stream.zip state' k3
 
 rk4ClassicalList state h f = rk4Classical state h f id id
+
+
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
