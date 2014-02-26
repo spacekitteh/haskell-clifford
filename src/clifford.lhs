@@ -314,7 +314,8 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
     signum (BladeSum []) = scalar Algebra.Additive.zero
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
-  (*>) s v = scalar s * v
+--    (*>) zero v = Algebra.Additive.zero
+    (*>) s v = scalar s * v
 
 
 
@@ -528,19 +529,27 @@ rk4Classical state h f project unproject = project $ newState where
 rk4ClassicalList state h f = rk4Classical state h f id id
 
 
+a `elementAdd` b = map (uncurry (+)) $ zip a b
+elementScale a b = map (\(s,x) -> s *> x) $ zip a b
 data ButcherTableau f = ButcherTableau {_a :: [f], _b :: [[f]], _c :: [[f]]}
 makeLenses ''ButcherTableau
-genericRKMethod tableau iterator = rkMethod where
-    s = tableau^.a & length 
-    aCoefficients = tableau^.a
+data RKAttribute = Explicit
+                 | HamiltonianFunction
+                 
+genericRKMethod tableau iterator attributes= undefined where --rkMethod where
+--    s = tableau^.c & length 
+--    aCoefficients = tableau^.a
     rkMethod state h f project unproject = project $ newState where
+--        y' = state' + sumList $ elementScale  (tableau^.b) [k n | n <- [1..s]]
+--        k i = map ((tableau^.c !! (i-1)) *>) evalDerivatives $ state' `elementAdd` (sumOfKs i)--f(tn+ci*h, yn+sumOfKs i)
+--        sumOfKs i = sumList $ elementScale ((tableau ^.a) !! (i-1)) [k j | j <- [1..s]]
         state' = unproject state
         newState = undefined
         evalDerivatives x = unproject $ f $ project x
-        k 0 = zero
+        --k 0 = zero
         -- add support for implicit b's
-        k n = (h*>) evalDerivatives . map (uncurry (+)) $ zip state' (map (\x -> a *> x) (k (n-1))) where
-            a = aCoefficients !! (n-1)
+        --k n = (h*>) evalDerivatives . map (uncurry (+)) $ zip state' (map (c *>) (k (n-1))) where
+        --    a = aCoefficients !! (n-1)
                                                                   
 \end{code}
 \bibliographystyle{IEEEtran}
