@@ -161,7 +161,7 @@ multiplyBladeList :: Algebra.Ring.C f => [Blade f] -> Blade f
 multiplyBladeList [] = error "Empty blade list!"
 multiplyBladeList (a:[]) = a
 multiplyBladeList a = bladeNormalForm $ Blade scale indices where
-    indices = concat $ map bIndices a
+    indices = concatMap bIndices a
     scale = foldl1 (*) (map bScale a)
 
 
@@ -297,7 +297,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
     a ^ n  =  multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
 
-two = fromInteger 2
+two = 2
 mul = (Algebra.Ring.*)
 \end{code}
 
@@ -411,7 +411,7 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
-inverse a = reverseMultivector a Clifford./ (bScale $ head $ mvTerms (a * reverseMultivector a))
+inverse a = reverseMultivector a Clifford./ bScale (head $ mvTerms (a * reverseMultivector a))
 recip=Clifford.inverse
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
@@ -445,8 +445,8 @@ root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
 root n a = converge $ rootIterationsStart n a one
 
 rootIterationsStart ::(Algebra.Field.C f, Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootIterationsStart n a@(BladeSum ((Blade s []) :xs)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero then one else (Algebra.Ring.one `e` [1,2])--BladeSum[Blade Algebra.Ring.one [1,2]]
+rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
+                     g = if s >= NPN.zero then one else Algebra.Ring.one `e` [1,2] --BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a g = rootHalleysIterations n a g
 
 
@@ -463,7 +463,7 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
     f'' x = fromInteger (-(n*(n-1))) * (x^(n-2))
 
 
-pow a p = (a ^ up) Clifford./> (Clifford.root down a) where
+pow a p = (a ^ up) Clifford./> Clifford.root down a where
     ratio = toRational p
     up = numerator ratio
     down = denominator ratio
@@ -494,8 +494,8 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 normalised a = a * (scalar $ NPN.recip $ magnitude a)
 
 log (BladeSum [Blade s []]) = scalar $ NPN.log s
-log a = (scalar (NPN.log mag)) + log' scaled where
-    scaled = normalised a
+log a = scalar (NPN.log mag) + log' scaled where
+    scaled = normalied a
     mag = magnitude a
     log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
          f x = a - Clifford.exp x
@@ -525,21 +525,21 @@ makeLenses ''DynamicSystem
 
 
 rk4Classical :: (Ord a, Algebra.Algebraic.C a) =>  stateType -> a -> (stateType->stateType) -> ([Multivector a] -> stateType) -> (stateType -> [Multivector a]) -> stateType
-rk4Classical state h f project unproject = project $ newState where
+rk4Classical state h f project unproject = project newState where
     update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] / Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
     newState = map (uncurry (+)) $ Data.List.Stream.zip state' update
     state' = unproject state
     evalDerivatives x = unproject $ f $ project x
     k1 = map (h*>) $ evalDerivatives state'
-    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (\x -> x / two) k1)
-    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (\x -> x / two) k2)
+    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (/ two) k1)
+    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (/ two) k2)
     k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' k3
 
 rk4ClassicalList state h f = rk4Classical state h f id id
 
 
-elementAdd a b = map (uncurry (+)) $ zip a b
-elementScale a b = map (\(s,x) -> s *> x) $ zip a b
+elementAdd = zipWith (+)
+elementScale = zipWith (*>) 
 data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [[f]], _c :: [f]}
 makeLenses ''ButcherTableau
 data RKAttribute f state = Explicit
@@ -547,15 +547,16 @@ data RKAttribute f state = Explicit
                  | AdaptiveStepSize {sigma :: f -> state -> f}
                  | ConvergenceTolerance {epsilon :: f}
                  
-genericRKMethod tableau iterator attributes = rkMethod where
+genericRKMethod tableau attributes = rkMethod where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
         l = _c tableau
     a n = l !! (n-1) where
         l = _a tableau
-    rkMethod t state h f project unproject = project $ newState where
+    --rkMethod :: (Algebra.Field.C z) => z -> stateType -> z -> (z -> stateType -> stateType) -> (stateType -> [Multivector z]) -> ([Multivector z] -> stateType) -> stateType
+    rkMethod t state h f project unproject = project newState where
         y' = elementAdd state' $ map  sumList $ elementScale  (tableau^.b) [k n | n <- [1..s]]
-        k i = elementScale h $ evalDerivatives (t + (c i)*> h) $ elementAdd state' (sumOfKs i)
+        k i = elementScale h $ evalDerivatives (t + c i *> h) $ elementAdd state' (sumOfKs i)
         sumOfKs i = map sumList $ elementScale (a i) [k j | j <- [1..s]]
         state' = unproject state
         newState = undefined
