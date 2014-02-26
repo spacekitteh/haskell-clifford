@@ -529,27 +529,26 @@ rk4Classical state h f project unproject = project $ newState where
 rk4ClassicalList state h f = rk4Classical state h f id id
 
 
-a `elementAdd` b = map (uncurry (+)) $ zip a b
+elementAdd a b = map (uncurry (+)) $ zip a b
 elementScale a b = map (\(s,x) -> s *> x) $ zip a b
-data ButcherTableau f = ButcherTableau {_a :: [f], _b :: [[f]], _c :: [[f]]}
+data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [[f]], _c :: [f]}
 makeLenses ''ButcherTableau
 data RKAttribute = Explicit
                  | HamiltonianFunction
                  
-genericRKMethod tableau iterator attributes= undefined where --rkMethod where
---    s = tableau^.c & length 
---    aCoefficients = tableau^.a
-    rkMethod state h f project unproject = project $ newState where
---        y' = state' + sumList $ elementScale  (tableau^.b) [k n | n <- [1..s]]
---        k i = map ((tableau^.c !! (i-1)) *>) evalDerivatives $ state' `elementAdd` (sumOfKs i)--f(tn+ci*h, yn+sumOfKs i)
---        sumOfKs i = sumList $ elementScale ((tableau ^.a) !! (i-1)) [k j | j <- [1..s]]
+genericRKMethod tableau iterator attributes = rkMethod where
+    s =  length (_c tableau)
+    c n = l !!  (n-1) where
+        l = _c tableau
+    a n = l !! (n-1) where
+        l = _a tableau
+    rkMethod t state h f project unproject = project $ newState where
+        y' = elementAdd state' $ map  sumList $ elementScale  (tableau^.b) [k n | n <- [1..s]]
+        k i = elementScale h $ evalDerivatives (t + (c i)*> h) $ elementAdd state' (sumOfKs i)
+        sumOfKs i = map sumList $ elementScale (a i) [k j | j <- [1..s]]
         state' = unproject state
         newState = undefined
-        evalDerivatives x = unproject $ f $ project x
-        --k 0 = zero
-        -- add support for implicit b's
-        --k n = (h*>) evalDerivatives . map (uncurry (+)) $ zip state' (map (c *>) (k (n-1))) where
-        --    a = aCoefficients !! (n-1)
+        evalDerivatives t x = unproject $ f t $ project x
                                                                   
 \end{code}
 \bibliographystyle{IEEEtran}
