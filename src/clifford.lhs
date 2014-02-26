@@ -338,6 +338,15 @@ converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs)
           | a == c = Just a
       checkPeriodic _ = Nothing
 
+convergeTol t [] = error "converge: empty list"
+convergeTol t xs = fromMaybe empty (convergeBy check Just xs)
+    where
+      empty = error "converge: error in impl"
+      check (a:b:c:_)
+          | (trace ("Converging at " ++ show a) a) == b = Just a
+          | a == c = Just a
+          | magnitude (a - b) <= t = Just b
+      check _ = Nothing
 
 aitkensAcceleration [] = []
 aitkensAcceleration a@(xn:[]) = a
@@ -536,6 +545,7 @@ makeLenses ''ButcherTableau
 data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: f -> state -> f}
+                 | ConvergenceTolerance {epsilon :: f}
                  
 genericRKMethod tableau iterator attributes = rkMethod where
     s =  length (_c tableau)
