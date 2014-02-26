@@ -533,8 +533,9 @@ elementAdd a b = map (uncurry (+)) $ zip a b
 elementScale a b = map (\(s,x) -> s *> x) $ zip a b
 data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [[f]], _c :: [f]}
 makeLenses ''ButcherTableau
-data RKAttribute = Explicit
+data RKAttribute f state = Explicit
                  | HamiltonianFunction
+                 | AdaptiveStepSize {sigma :: f -> state -> f}
                  
 genericRKMethod tableau iterator attributes = rkMethod where
     s =  length (_c tableau)
