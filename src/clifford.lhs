@@ -570,7 +570,7 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 
 --TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
 
-{-|
+
 genericRKMethod tableau fixedPointIterator attributes = rkMethod where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
@@ -589,7 +589,7 @@ genericRKMethod tableau fixedPointIterator attributes = rkMethod where
         state' = unproject state
         newState = undefined
         evalDerivatives t x = unproject $ f t $ project x
-|-}
+
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
