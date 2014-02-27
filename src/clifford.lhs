@@ -59,7 +59,7 @@ import Number.NonNegative
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
-import qualified Test.QuickCheck as QC
+--import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge (convergeBy)
 import Control.DeepSeq 
 import Number.Ratio hiding (scale)
