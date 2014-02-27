@@ -59,7 +59,7 @@ import Number.NonNegative
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
---import qualified Test.QuickCheck as QC
+import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge (convergeBy)
 import Control.DeepSeq 
 import Number.Ratio hiding (scale)
@@ -389,7 +389,7 @@ takeEvery nth xs = case drop (nth-1) xs of
                      [] -> []
 
 cosh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ expTerms x
-http://hackage.haskell.org/package/containers
+
 sinh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
