@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!))
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -252,10 +252,10 @@ multiplyOutBlades x y = [bladeMul l r | l <-x, r <- y]
 
 --multiplyList :: Algebra.Ring.C t => [Multivector t] -> Multivector t
 multiplyList [] = error "Empty list"
-multiplyList a@(x:[]) = x
+--multiplyList a@(x:[]) = x
 multiplyList l = mvNormalForm $ BladeSum listOfBlades where
     expandedBlades :: Algebra.Ring.C a => [[Blade a]] -> [Blade a]
-    expandedBlades a = Data.List.Stream.foldl1 (multiplyOutBlades) a
+    expandedBlades a = foldl1 multiplyOutBlades a
     listOfBlades = expandedBlades $ map mvTerms l
 
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
@@ -297,7 +297,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
     a ^ n  =  multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
 
-two = 2
+two = fromInteger 2
 mul = (Algebra.Ring.*)
 \end{code}
 
@@ -495,7 +495,7 @@ normalised a = a * (scalar $ NPN.recip $ magnitude a)
 
 log (BladeSum [Blade s []]) = scalar $ NPN.log s
 log a = scalar (NPN.log mag) + log' scaled where
-    scaled = normalied a
+    scaled = normalised a
     mag = magnitude a
     log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
          f x = a - Clifford.exp x
@@ -546,13 +546,16 @@ data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: f -> state -> f}
                  | ConvergenceTolerance {epsilon :: f}
-                 
-genericRKMethod tableau attributes = rkMethod where
+                 | ConvergenceFunction {converger :: [Multivector f] -> Multivector f,
+                                        derivs :: [[Multivector f] -> Multivector f]}
+genericRKMethod tableau fixedPointIterator attributes = rkMethod where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
         l = _c tableau
     a n = l !! (n-1) where
         l = _a tableau
+--    convergeList :: [[f]] -> [f]
+--    convergeList l
     --rkMethod :: (Algebra.Field.C z) => z -> stateType -> z -> (z -> stateType -> stateType) -> (stateType -> [Multivector z]) -> ([Multivector z] -> stateType) -> stateType
     rkMethod t state h f project unproject = project newState where
         y' = elementAdd state' $ map  sumList $ elementScale  (tableau^.b) [k n | n <- [1..s]]
