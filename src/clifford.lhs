@@ -55,7 +55,7 @@ import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
 import Number.NonNegative
-import qualified Data.Vector as V
+--import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
@@ -546,17 +546,8 @@ data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: f -> state -> f}
                  | ConvergenceTolerance {epsilon :: f}
-                 | ConvergenceFunction {converger :: [Multivector f] -> Multivector f    d}
-
-genericRKMethod
-  :: (Ord f1, Algebra.Module.C a (Multivector f1),
-      Algebra.Module.C f a, Algebra.Module.C f (Multivector f1),
-      Algebra.Module.C [f] (Multivector f1), Algebra.Additive.C f1) =>
-     ButcherTableau f
-     -> t -> t1 -> [a] -> t2 -> [a]-> ([a] -> t3 -> t2)-> ([Multivector f1] -> t3)-> (t2 -> [Multivector f1])
-     -> t3
-
-
+                 | ConvergenceFunction {converger :: [Multivector f] -> Multivector f }
+{-|
 sumVector = sumList . V.toList 
 genericRKMethod tableau fixedPointIterator attributes = rkMethod where
     s =  length (_c tableau)
@@ -574,7 +565,7 @@ genericRKMethod tableau fixedPointIterator attributes = rkMethod where
         state' = unproject state
         newState = undefined
         evalDerivatives t x = unproject $ f t $ project x
-                                                                  
+   |-}                                                               
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
