@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -55,7 +55,7 @@ import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
 import Number.NonNegative
---import qualified Data.Vector as V
+import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
@@ -540,32 +540,56 @@ rk4ClassicalList state h f = rk4Classical state h f id id
 
 elementAdd = zipWith (+)
 elementScale = zipWith (*>) 
-data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [[f]], _c :: [f]}
+a `elementSub` b = zipWith (-) a b
+a `elementMul` b = zipWith (*) a b
+data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [f], _c :: [f]}
 makeLenses ''ButcherTableau
 data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: f -> state -> f}
                  | ConvergenceTolerance {epsilon :: f}
                  | ConvergenceFunction {converger :: [Multivector f] -> Multivector f }
-{-|
+                 | FixedPointIterator 
+
 sumVector = sumList . V.toList 
+
+--systemRootSolver :: [Multivector f] -> [Multivector f] -> ratio -> [Multivector f] -> [Multivector f] -> [Multivector f]
+
+--This will stop as soon as one of the elements converges. This is bad. Need to make it skip convergent ones and focus on the remainig.
+systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
+    update (xm1,jm1) xm2 | any (== zero) dx =  [(xm1,undefined)]
+                   | otherwise = if x == xm1 then [(x,undefined)] else (x,j) : update (x,j) xm1 where
+      x = xm1 `elementSub` ( (fm1 `elementMul` dx) `elementMul` ody)
+      j = undefined
+      fm1 = f xm1
+      fm2 = f xm2
+      dx = elementSub xm1 xm2
+      dy = elementSub fm1 fm2
+      ody = map Clifford.inverse dy
+    ident = undefined
+
+--TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
+
+{-|
 genericRKMethod tableau fixedPointIterator attributes = rkMethod where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
         l = _c tableau
     a n = l !! (n-1) where
         l = _a tableau
+
 --    convergeList :: [[f]] -> [f]
 --    convergeList l
     --rkMethod :: (Algebra.Field.C z) => z -> stateType -> z -> (z -> stateType -> stateType) -> (stateType -> [Multivector z]) -> ([Multivector z] -> stateType) -> stateType
     rkMethod t state h f project unproject = project newState where
-        y' = elementAdd state' $ map  sumVector $ elementScale  (tableau^.b) $ generate s k
+--        y' = elementAdd state' $ V.toList $ V.map sumVector $ V.zipWith (*>) (V.fromList $ V.fromList (tableau^.b)) (V.generate s k)
+       
         k i = elementScale h $ evalDerivatives (t + c i *> h) $ elementAdd state' (sumOfKs i)
         sumOfKs i = map sumList $ elementScale (a i) [k j | j <- [1..s]]
         state' = unproject state
         newState = undefined
         evalDerivatives t x = unproject $ f t $ project x
-   |-}                                                               
+|-}
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
