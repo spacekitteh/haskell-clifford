@@ -55,11 +55,11 @@ import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
 import Number.NonNegative
-
+import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
 import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
-import qualified Test.QuickCheck as QC
+--import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge (convergeBy)
 import Control.DeepSeq 
 import Number.Ratio hiding (scale)
@@ -389,7 +389,7 @@ takeEvery nth xs = case drop (nth-1) xs of
                      [] -> []
 
 cosh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ expTerms x
-
+http://hackage.haskell.org/package/containers
 sinh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
@@ -546,8 +546,18 @@ data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: f -> state -> f}
                  | ConvergenceTolerance {epsilon :: f}
-                 | ConvergenceFunction {converger :: [Multivector f] -> Multivector f,
-                                        derivs :: [[Multivector f] -> Multivector f]}
+                 | ConvergenceFunction {converger :: [Multivector f] -> Multivector f    d}
+
+genericRKMethod
+  :: (Ord f1, Algebra.Module.C a (Multivector f1),
+      Algebra.Module.C f a, Algebra.Module.C f (Multivector f1),
+      Algebra.Module.C [f] (Multivector f1), Algebra.Additive.C f1) =>
+     ButcherTableau f
+     -> t -> t1 -> [a] -> t2 -> [a]-> ([a] -> t3 -> t2)-> ([Multivector f1] -> t3)-> (t2 -> [Multivector f1])
+     -> t3
+
+
+sumVector = sumList . V.toList 
 genericRKMethod tableau fixedPointIterator attributes = rkMethod where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
@@ -558,7 +568,7 @@ genericRKMethod tableau fixedPointIterator attributes = rkMethod where
 --    convergeList l
     --rkMethod :: (Algebra.Field.C z) => z -> stateType -> z -> (z -> stateType -> stateType) -> (stateType -> [Multivector z]) -> ([Multivector z] -> stateType) -> stateType
     rkMethod t state h f project unproject = project newState where
-        y' = elementAdd state' $ map  sumList $ elementScale  (tableau^.b) [k n | n <- [1..s]]
+        y' = elementAdd state' $ map  sumVector $ elementScale  (tableau^.b) $ generate s k
         k i = elementScale h $ evalDerivatives (t + c i *> h) $ elementAdd state' (sumOfKs i)
         sumOfKs i = map sumList $ elementScale (a i) [k j | j <- [1..s]]
         state' = unproject state
