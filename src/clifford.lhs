@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford  where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -549,7 +549,7 @@ data RKAttribute f state = Explicit
                  | AdaptiveStepSize {sigma :: f -> state -> f}
                  | ConvergenceTolerance {epsilon :: f}
                  | ConvergenceFunction {converger :: [Multivector f] -> Multivector f }
-                 | FixedPointIterator 
+                 | RootSolver 
 
 sumVector = sumList . V.toList 
 
@@ -571,7 +571,7 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 --TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
 
 
-genericRKMethod tableau fixedPointIterator attributes = rkMethod where
+genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
         l = _c tableau
@@ -580,12 +580,12 @@ genericRKMethod tableau fixedPointIterator attributes = rkMethod where
 
 --    convergeList :: [[f]] -> [f]
 --    convergeList l
-    --rkMethod :: (Algebra.Field.C z) => z -> stateType -> z -> (z -> stateType -> stateType) -> (stateType -> [Multivector z]) -> ([Multivector z] -> stateType) -> stateType
-    rkMethod t state h f project unproject = project newState where
---        y' = elementAdd state' $ V.toList $ V.map sumVector $ V.zipWith (*>) (V.fromList $ V.fromList (tableau^.b)) (V.generate s k)
-       
-        k i = elementScale h $ evalDerivatives (t + c i *> h) $ elementAdd state' (sumOfKs i)
-        sumOfKs i = map sumList $ elementScale (a i) [k j | j <- [1..s]]
+    rkMethodImplicitFixedPoint t state h f project unproject = project newState where
+        zi i = converge $ iterate (zkp1 i) (repeat zero)
+        zkp1 i zk= map (h*>) (sumOfJs i zk)
+        sumOfJs i zk= map sumList $ [getAAndScale (a i) j zk| j <- [1..s]]
+        getAAndScale ai j zk= scaledByAij (ai !! (j-1)) zk
+        scaledByAij a z = map (a*>) $ evalDerivatives t $ elementAdd state' z
         state' = unproject state
         newState = undefined
         evalDerivatives t x = unproject $ f t $ project x
