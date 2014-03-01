@@ -33,9 +33,9 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 %endif
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
-module Clifford  where
+module Clifford where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -205,7 +205,7 @@ instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq)
+data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq, Ord)
 
 makeLenses ''Multivector
 mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
@@ -315,7 +315,7 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
 --    (*>) zero v = Algebra.Additive.zero
-    (*>) s v = scalar s * v
+    (*>) s v = v & mvTerms & map (bladeScaleLeft s) & BladeSum
 
 
 
@@ -544,6 +544,10 @@ a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
 data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [f], _c :: [f]}
 makeLenses ''ButcherTableau
+
+--rk4ClassicalTableau :: ButcherTableau NPN.Double
+rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
+implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
 data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: f -> state -> f}
@@ -570,25 +574,39 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 
 --TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
 
+rk4ClassicalFromTableau t state h f = impl t state h f id id where
+    impl = genericRKMethod rk4ClassicalTableau []
+implicitEulerMethod t state h f = impl t state h f id id where
+    impl = genericRKMethod implicitEulerTableau []
 
+lobattoIIIASecondOrderTableau = ButcherTableau [[0,0],[0.5::NPN.Double,0.5]] [0.5,0.5] [0,1]
+lobattoIIIASecondOrder t state h f = impl t state h f id id where
+    impl = genericRKMethod lobattoIIIASecondOrderTableau []
+
+convergeList ::(Show f, Ord f) => [[f]] -> [f]
+convergeList = converge
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
         l = _c tableau
     a n = l !! (n-1) where
         l = _a tableau
-
---    convergeList :: [[f]] -> [f]
---    convergeList l
-    rkMethodImplicitFixedPoint t state h f project unproject = project newState where
-        zi i = converge $ iterate (zkp1 i) (repeat zero)
-        zkp1 i zk= map (h*>) (sumOfJs i zk)
-        sumOfJs i zk= map sumList $ [getAAndScale (a i) j zk| j <- [1..s]]
-        getAAndScale ai j zk= scaledByAij (ai !! (j-1)) zk
-        scaledByAij a z = map (a*>) $ evalDerivatives t $ elementAdd state' z
+    b i = l !! (i - 1) where
+        l = _b tableau
+    dimension = 1
+    zeroVector = replicate dimension zero
+    rkMethodImplicitFixedPoint :: (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
+    rkMethodImplicitFixedPoint time state h f project unproject = project (trace ("Newstate is " ++ show newState) newState) where
+        zi i = convergeList $ iterate (zkp1 i) zeroVector where 
+            zkp1 i zk= map (h*>) (sumOfJs i (trace ("i is " ++show i ++ " and zk is " ++ show zk)zk)) where
+                sumOfJs i zk= map sumList $ [getAAndScale (a i) j zk| j <- [1..s]] where
+                    getAAndScale ai j zk= scaledByAij (ai !! (j-1)) zk where 
+                        scaledByAij a guess = map (a*>) $ evalDerivatives (time + (c i)*h) $ elementAdd state' (trace ("guess is " ++ show guess) guess)
         state' = unproject state
-        newState = undefined
-        evalDerivatives t x = unproject $ f t $ project x
+        newState = elementAdd (trace ("state is " ++ show state')state') (trace ("dy = " ++ show dy) dy)
+        dy = map (h*>) $ map sumList  [map ((b i)*>) (zi i) | i <- [1..s]] 
+--        evalDerivatives :: f -> [Multivector f] -> [Multivector f]
+        evalDerivatives time x = unproject $ f time $ project x
 
 \end{code}
 \bibliographystyle{IEEEtran}
