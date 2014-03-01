@@ -18,7 +18,7 @@ I am basing the design of this on Issac Trotts' geometric algebra library.\cite{
 Let us  begin. We are going to use the Numeric Prelude because it is (shockingly) nicer for numeric stuff.
 
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -585,6 +585,9 @@ lobattoIIIASecondOrder t state h f = impl t state h f id id where
 
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
+
+type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (t -> stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
+genericRKMethod :: (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
@@ -595,7 +598,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         l = _b tableau
     dimension = 1
     zeroVector = replicate dimension zero
-    rkMethodImplicitFixedPoint :: (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
+    rkMethodImplicitFixedPoint :: RKStepper t stateType --(Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (t -> stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
     rkMethodImplicitFixedPoint time state h f project unproject = project (trace ("Newstate is " ++ show newState) newState) where
         zi i = convergeList $ iterate (zkp1 i) zeroVector where 
             zkp1 i zk= map (h*>) (sumOfJs i (trace ("i is " ++show i ++ " and zk is " ++ show zk)zk)) where
