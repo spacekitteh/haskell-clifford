@@ -554,6 +554,8 @@ data RKAttribute f state = Explicit
                  | ConvergenceTolerance {epsilon :: f}
                  | ConvergenceFunction {converger :: [Multivector f] -> Multivector f }
                  | RootSolver 
+                 | UseAutomaticDifferentiationForRootSolver
+                 | StartingGuessMethod
 
 sumVector = sumList . V.toList 
 
@@ -604,9 +606,6 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         l = _a tableau
     b i = l !! (i - 1) where
         l = _b tableau
-    dimension = 2
-    zeroVector :: [Multivector t]
-    zeroVector = replicate dimension zero
     sumListOfLists = (map sumList) . transpose --foldl elementAdd zeroVector
     rkMethodImplicitFixedPoint :: RKStepper t stateType
     rkMethodImplicitFixedPoint (time, state) h f project unproject = (showOutput "time" (time + h*c s),project (trace ("Newstate is " ++ show newState) newState)) where
