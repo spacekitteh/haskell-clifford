@@ -587,6 +587,11 @@ lobattoIIIASecondOrder (t, state) h f = impl (t, state) h f id id where
 lobattoIIIAFourthOrderTableau = ButcherTableau [[0,0,0],[((5 NPN./24)::NPN.Double),1 NPN./3,-1 NPN./24],[1 NPN./6,2 NPN./3,1 NPN./6]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
 lobattoIIIAFourthOrder (t, state) h f = impl (t, state) h f id id where
     impl = genericRKMethod lobattoIIIAFourthOrderTableau []
+
+lobattoIIIBFourthOrderTableau = ButcherTableau [[1 NPN./6,(-1) NPN./6,0],[((1 NPN./6)::NPN.Double),1 NPN./3,0],[1 NPN./6,5 NPN./6, 0]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
+lobattoIIIBFourthOrder (t, state) h f = impl (t, state) h f id id where
+    impl = genericRKMethod lobattoIIIBFourthOrderTableau []
+
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
@@ -602,7 +607,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_tableauC tableau)
     c n = l !!  (n-1) where
         l = _tableauC tableau
-    a n = l !! (n-1) where
+    a n = (l !! (n-1)) & filter (/= zero) where
         l = _tableauA tableau
     b i = l !! (i - 1) where
         l = _tableauB tableau
@@ -610,19 +615,17 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     rkMethodImplicitFixedPoint :: RKStepper t stateType
     rkMethodImplicitFixedPoint (time, state) h f project unproject = (time + h*c s, project newState) where
         zi i = convergeList $ iterate (zkp1 i) initialGuess where
-            initialGuess = map (h'*>) $ unproject $ f guessTime state 
+            initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             h' = h * c i
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector t] -> [Multivector t]
             zkp1 i zk= map (h*>) (sumOfJs i zk) where
-                sumOfJs i zk=  sumListOfLists $ [getAAndScale (a i) j zk| j <- ([1..s]&filter (\j -> ((a i)!! (j - 1))/= zero))] where
-                    getAAndScale ai j zk=  scaledByAij (ai !! (j-1)) zk where 
-                        scaledByAij :: t -> [Multivector t] -> [Multivector t]
-                        scaledByAij a guess = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
+                sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
+                    scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
         state' = unproject state
         newState = elementAdd state' dy
         dy :: [Multivector t]
-        dy = sumListOfLists $  [map ((b i)*>) (zi i) | i <- [1..s]] 
+        dy = sumListOfLists $ [map ((b i)*>) (zi i) | i <- [1..s]] 
         evalDerivatives :: t -> [Multivector t] -> [Multivector t]
         evalDerivatives time x = unproject $ f time $ project x
 
