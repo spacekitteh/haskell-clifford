@@ -18,7 +18,7 @@ I am basing the design of this on Issac Trotts' geometric algebra library.\cite{
 Let us  begin. We are going to use the Numeric Prelude because it is (shockingly) nicer for numeric stuff.
 
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -587,7 +587,7 @@ convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
 type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (t -> stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
-genericRKMethod :: (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
+genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_c tableau)
     c n = l !!  (n-1) where
