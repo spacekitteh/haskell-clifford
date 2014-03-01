@@ -66,8 +66,8 @@ import Number.Ratio hiding (scale)
 import Algebra.ToRational
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
-import Debug.Trace
---trace _ a = a
+--import Debug.Trace
+trace _ a = a
 
 \end{code}
 
@@ -574,20 +574,27 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 
 --TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
 
-rk4ClassicalFromTableau t state h f = impl t state h f id id where
+rk4ClassicalFromTableau (t,state) h f = impl (t, state) h f id id where
     impl = genericRKMethod rk4ClassicalTableau []
-implicitEulerMethod t state h f = impl t state h f id id where
+implicitEulerMethod (t, state) h f = impl (t, state) h f id id where
     impl = genericRKMethod implicitEulerTableau []
 
 lobattoIIIASecondOrderTableau = ButcherTableau [[0,0],[0.5::NPN.Double,0.5]] [0.5,0.5] [0,1]
-lobattoIIIASecondOrder t state h f = impl t state h f id id where
+lobattoIIIASecondOrder (t, state) h f = impl (t, state) h f id id where
     impl = genericRKMethod lobattoIIIASecondOrderTableau []
-
+lobattoIIIAFourthOrderTableau = ButcherTableau [[0,0,0],[((5 NPN./24)::NPN.Double),1 NPN./3,-1 NPN./24],[1 NPN./6,2 NPN./3,1 NPN./6]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
+lobattoIIIAFourthOrder (t, state) h f = impl (t, state) h f id id where
+    impl = genericRKMethod lobattoIIIAFourthOrderTableau []
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
-type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (t -> stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
-
+type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => 
+    (t, stateType) -> t -> 
+    (t -> stateType -> stateType) -> 
+    ([Multivector t] -> stateType) -> 
+    (stateType ->[Multivector t]) -> 
+    (t,stateType)
+showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
 genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_c tableau)
@@ -597,24 +604,29 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         l = _a tableau
     b i = l !! (i - 1) where
         l = _b tableau
-    dimension = 1
+    dimension = 2
     zeroVector :: [Multivector t]
     zeroVector = replicate dimension zero
-    rkMethodImplicitFixedPoint :: RKStepper t stateType --(Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => t -> stateType -> t -> (t -> stateType -> stateType) -> ([Multivector t] -> stateType) -> (stateType ->[Multivector t]) -> stateType
-    rkMethodImplicitFixedPoint time state h f project unproject = project (trace ("Newstate is " ++ show newState) newState) where
-        zi i = convergeList $ iterate (zkp1 i) zeroVector where
+    sumListOfLists = (map sumList) . transpose --foldl elementAdd zeroVector
+    rkMethodImplicitFixedPoint :: RKStepper t stateType
+    rkMethodImplicitFixedPoint (time, state) h f project unproject = (showOutput "time" (time + h*c s),project (trace ("Newstate is " ++ show newState) newState)) where
+        zi i = convergeList $ iterate (zkp1 i) initialGuess where
+            initialGuess = map (h'*>) $ unproject $ f guessTime state where
+                h' = h * c i
+                guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector t] -> [Multivector t]
             zkp1 i zk= map (h*>) (sumOfJs i (trace ("i is " ++show i ++ " and zk is " ++ show zk)zk)) where
-                sumOfJs i zk= map sumList $ [getAAndScale (a i) j zk| j <- [1..s]] where
-                    getAAndScale ai j zk= scaledByAij (ai !! (j-1)) zk where 
+                sumOfJs i zk= showOutput "sumOfJs" $ sumListOfLists $ showOutput "getAAndScale over j" $[getAAndScale (a i) j zk| j <- ([1..s]&filter (\j -> ((a i)!! (j - 1))/= zero))] where
+                    getAAndScale ai j zk= showOutput "getAAndScale" $ scaledByAij (ai !! (j-1)) zk where 
                         scaledByAij :: t -> [Multivector t] -> [Multivector t]
-                        scaledByAij a guess = map ((trace ("aij is " ++ show a)a)*>) $ evalDerivatives (time + (c i)*h) $ elementAdd state' (trace ("guess is " ++ show guess) guess)
+                        scaledByAij a guess =showOutput ("scaledByAij") $ map ((trace ("a"++show i++ show j++" is " ++ show a)a)*>) $ evalDerivatives (time + (c i)*h) $ elementAdd state' (trace ("guess is " ++ show guess) guess)
         state' = unproject state
         newState = elementAdd (trace ("state is " ++ show state')state') (trace ("dy = " ++ show dy) dy)
         dy :: [Multivector t]
-        dy = map (h*>) $ map sumList  [map ((b i)*>) (zi i) | i <- [1..s]] 
---        evalDerivatives :: f -> [Multivector f] -> [Multivector f]
-        evalDerivatives time x = unproject $ f time $ project x
+        dy = sumListOfLists $  [map ((b i)*>) (zi i) | i <- [1..s]] 
+        evalDerivatives :: t -> [Multivector t] -> [Multivector t]
+        evalDerivatives time x = showOutput ("evalDerivatives at time "++show time) $ unproject $ f time $ project (trace ("input of evalDerivatives at time " ++ show time++ " is " ++show x)x)
+
 
 \end{code}
 \bibliographystyle{IEEEtran}

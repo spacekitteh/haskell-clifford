@@ -2,5 +2,6 @@ module Clifford.Demo.ExponentialDecay where
 import Clifford
 import Debug.Trace
 import qualified NumericPrelude.Numeric as NPN
-expDecay _ x = map negate $ Debug.Trace.trace ("Input of expdecay is " ++ show x) x
-decay = map magnitude $ map head $ iterate (\init -> lobattoIIIASecondOrder (0::NPN.Double) init 0.001 expDecay) [scalar (1.0::NPN.Double)]
+import Algebra.Module
+expDecay _ x = map negate $ map ((*) (1.0 `e` []))  x --Debug.Trace.trace ("Input of expdecay is " ++ show x) x
+decay = map (\(t, x) -> (t,magnitude $ head x))  $  iterate (\init -> lobattoIIIAFourthOrder init 0.01 expDecay) (0.0::NPN.Double,[scalar (1.0::NPN.Double)])
