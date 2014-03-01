@@ -542,7 +542,7 @@ elementAdd = zipWith (+)
 elementScale = zipWith (*>) 
 a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
-data ButcherTableau f = ButcherTableau {_a :: [[f]], _b :: [f], _c :: [f]}
+data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
 makeLenses ''ButcherTableau
 
 --rk4ClassicalTableau :: ButcherTableau NPN.Double
@@ -599,32 +599,32 @@ type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t),
 showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
 genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
-    s =  length (_c tableau)
+    s =  length (_tableauC tableau)
     c n = l !!  (n-1) where
-        l = _c tableau
+        l = _tableauC tableau
     a n = l !! (n-1) where
-        l = _a tableau
+        l = _tableauA tableau
     b i = l !! (i - 1) where
-        l = _b tableau
-    sumListOfLists = (map sumList) . transpose --foldl elementAdd zeroVector
+        l = _tableauB tableau
+    sumListOfLists = (map sumList) . transpose 
     rkMethodImplicitFixedPoint :: RKStepper t stateType
-    rkMethodImplicitFixedPoint (time, state) h f project unproject = (showOutput "time" (time + h*c s),project (trace ("Newstate is " ++ show newState) newState)) where
+    rkMethodImplicitFixedPoint (time, state) h f project unproject = (time + h*c s, project newState) where
         zi i = convergeList $ iterate (zkp1 i) initialGuess where
-            initialGuess = map (h'*>) $ unproject $ f guessTime state where
-                h' = h * c i
-                guessTime = time + h'
+            initialGuess = map (h'*>) $ unproject $ f guessTime state 
+            h' = h * c i
+            guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector t] -> [Multivector t]
-            zkp1 i zk= map (h*>) (sumOfJs i (trace ("i is " ++show i ++ " and zk is " ++ show zk)zk)) where
-                sumOfJs i zk= showOutput "sumOfJs" $ sumListOfLists $ showOutput "getAAndScale over j" $[getAAndScale (a i) j zk| j <- ([1..s]&filter (\j -> ((a i)!! (j - 1))/= zero))] where
-                    getAAndScale ai j zk= showOutput "getAAndScale" $ scaledByAij (ai !! (j-1)) zk where 
+            zkp1 i zk= map (h*>) (sumOfJs i zk) where
+                sumOfJs i zk=  sumListOfLists $ [getAAndScale (a i) j zk| j <- ([1..s]&filter (\j -> ((a i)!! (j - 1))/= zero))] where
+                    getAAndScale ai j zk=  scaledByAij (ai !! (j-1)) zk where 
                         scaledByAij :: t -> [Multivector t] -> [Multivector t]
-                        scaledByAij a guess =showOutput ("scaledByAij") $ map ((trace ("a"++show i++ show j++" is " ++ show a)a)*>) $ evalDerivatives (time + (c i)*h) $ elementAdd state' (trace ("guess is " ++ show guess) guess)
+                        scaledByAij a guess = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
         state' = unproject state
-        newState = elementAdd (trace ("state is " ++ show state')state') (trace ("dy = " ++ show dy) dy)
+        newState = elementAdd state' dy
         dy :: [Multivector t]
         dy = sumListOfLists $  [map ((b i)*>) (zi i) | i <- [1..s]] 
         evalDerivatives :: t -> [Multivector t] -> [Multivector t]
-        evalDerivatives time x = showOutput ("evalDerivatives at time "++show time) $ unproject $ f time $ project (trace ("input of evalDerivatives at time " ++ show time++ " is " ++show x)x)
+        evalDerivatives time x = unproject $ f time $ project x
 
 
 \end{code}
