@@ -27,7 +27,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 %if False
 \begin{code}
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 #-}
---  OPTIONS_GHC -Odph -fvectorise
+{-# OPTIONS_GHC -Odph -fvectorise -package dph-lifted-vseg #-}
 --  LANGUAGE ParallelArrays
 \end{code}
 %endif
@@ -57,7 +57,6 @@ import Data.Maybe
 import Number.NonNegative
 import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
-import Numeric.Compensated
 import qualified NumericPrelude.Numeric as NPN
 --import qualified Test.QuickCheck as QC
 import Math.Sequence.Converge (convergeBy)
