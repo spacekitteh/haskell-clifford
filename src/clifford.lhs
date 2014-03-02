@@ -18,7 +18,7 @@ I am basing the design of this on Issac Trotts' geometric algebra library.\cite{
 Let us  begin. We are going to use the Numeric Prelude because it is (shockingly) nicer for numeric stuff.
 
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -66,8 +66,11 @@ import Algebra.ToRational
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
 import Control.Exception (assert)
---import Debug.Trace
-trace _ a = a
+import Data.Maybe
+import Data.Data
+import Data.DeriveTH
+import Debug.Trace
+--trace _ a = a
 
 \end{code}
 
@@ -76,7 +79,9 @@ The first problem: How to represent basis blades. One way to do it is via genera
 
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
+
 data Blade f = Blade {_scale :: f, _indices :: [Integer]} 
+
 makeLenses ''Blade
 bScale b =  b^.scale
 bIndices b = b^.indices
@@ -339,15 +344,7 @@ converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs)
           | a == c = Just a
       checkPeriodic _ = Nothing
 
-convergeTol t [] = error "converge: empty list"
-convergeTol t xs = fromMaybe empty (convergeBy check Just xs)
-    where
-      empty = error "converge: error in impl"
-      check (a:b:c:_)
-          | (trace ("Converging at " ++ show a) a) == b = Just a
-          | a == c = Just a
-          | magnitude (a - b) <= t = Just b
-      check _ = Nothing
+
 
 aitkensAcceleration [] = []
 aitkensAcceleration a@(xn:[]) = a
@@ -472,7 +469,7 @@ pow a p = (a ^ up) Clifford./> Clifford.root down a where
 
 halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
 halleysMethod f f' f'' = iterate update where
-    update x = (trace ("Halley iteration at " ++ show x) x) - (numerator x * Clifford.inverse (denominator x)) where
+    update x = x - (numerator x * Clifford.inverse (denominator x)) where
         numerator x = multiplyList [2, fx, dfx]
         denominator x = multiplyList [2, dfx, dfx] - (fx * ddfx)
         fx = f x
@@ -549,14 +546,29 @@ makeLenses ''ButcherTableau
 --rk4ClassicalTableau :: ButcherTableau NPN.Double
 rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
 implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
+
+type ConvergerFunction f = [Multivector f] -> Multivector f 
+type AdaptiveStepSizeFunction f state = f -> state -> f 
 data RKAttribute f state = Explicit
                  | HamiltonianFunction
-                 | AdaptiveStepSize {sigma :: f -> state -> f}
+                 | AdaptiveStepSize {sigma :: AdaptiveStepSizeFunction f state}
                  | ConvergenceTolerance {epsilon :: f}
-                 | ConvergenceFunction {converger :: [Multivector f] -> Multivector f }
+                 | ConvergenceFunction {converger :: ConvergerFunction f } 
                  | RootSolver 
                  | UseAutomaticDifferentiationForRootSolver
-                 | StartingGuessMethod
+                 | StartingGuessMethod --deriving (Show, Eq)-- deriving (Typeable, Data) --this doesn't work and i cbf trying to figure out why
+
+{-$( derive makeEq ''ConvergerFunction)
+$( derive makeShow ''ConvergerFunction)
+$( derive makeEq ''AdaptiveStepSizeFunction)
+$( derive makeShow ''AdaptiveStepSizeFunction)
+-- $( derive makeTypeable ''Blade)
+-- $( derive makeData ''
+$( derive makeTypeable ''Multivector)
+$( derive makeData ''Multivector)-}
+$( derive makeIs ''RKAttribute)
+-- $( derive makeData ''RKAttribute)
+-- $( derive makeTypeable ''RKAttribute)
 
 sumVector = sumList . V.toList 
 
@@ -564,7 +576,7 @@ sumVector = sumList . V.toList
 
 --This will stop as soon as one of the elements converges. This is bad. Need to make it skip convergent ones and focus on the remainig.
 systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
-    update (xm1,jm1) xm2 | any (== zero) dx =  [(xm1,undefined)]
+    update (xm1,jm1) xm2 | elem zero dx =  [(xm1,undefined)]
                    | otherwise = if x == xm1 then [(x,undefined)] else (x,j) : update (x,j) xm1 where
       x = xm1 `elementSub` ( (fm1 `elementMul` dx) `elementMul` ody)
       j = undefined
@@ -585,6 +597,9 @@ implicitEulerMethod (t, state) h f = impl (t, state) h f id id where
 lobattoIIIASecondOrderTableau = ButcherTableau [[0,0],[0.5::NPN.Double,0.5]] [0.5,0.5] [0,1]
 lobattoIIIASecondOrder (t, state) h f = impl (t, state) h f id id where
     impl = genericRKMethod lobattoIIIASecondOrderTableau []
+
+lobattoIIIAFourthOrderWithTol (t, state) h f = impl (t, state) h f id id where
+    impl = genericRKMethod lobattoIIIAFourthOrderTableau [ConvergenceTolerance 1.0e-8]
 lobattoIIIAFourthOrderTableau = ButcherTableau [[0,0,0],[((5 NPN./24)::NPN.Double),1 NPN./3,-1 NPN./24],[1 NPN./6,2 NPN./3,1 NPN./6]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
 lobattoIIIAFourthOrder (t, state) h f = impl (t, state) h f id id where
     impl = genericRKMethod lobattoIIIAFourthOrderTableau []
@@ -603,7 +618,19 @@ type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t),
     (stateType ->[Multivector t]) -> 
     (t,stateType)
 showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
-genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
+
+convergeTolLists :: (Ord f, Eq f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f) => f ->  [[Multivector f]] -> [Multivector f]
+convergeTolLists t [] = error "converge: empty list"
+convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
+    where
+      empty = error "converge: error in impl"
+      check (a:b:c:_)
+          | (trace ("Converging at " ++ show a) a) == b = Just b
+          | a == c = Just c
+          | (magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c)) <= t ) = showOutput ("convergence with tolerance "++ show t )$ Just c
+      check _ = Nothing
+
+genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t, Algebra.Absolute.C t, Algebra.Algebraic.C t) =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_tableauC tableau)
     c n = l !!  (n-1) where
@@ -612,10 +639,15 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         l = _tableauA tableau
     b i = l !! (i - 1) where
         l = _tableauB tableau
-    sumListOfLists = (map sumList) . transpose 
+    sumListOfLists = map sumList . transpose 
+    converger :: (Ord t, Algebra.Algebraic.C t, Algebra.Absolute.C t) => [[Multivector t]] -> [Multivector t]
+    converger = case  find (isConvergenceTolerance) attributes of
+                  Just (ConvergenceTolerance tol) ->  convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
+                  Nothing -> trace "No convergence tolerance specified, defaulting to equality" convergeList
+    
     rkMethodImplicitFixedPoint :: RKStepper t stateType
     rkMethodImplicitFixedPoint (time, state) h f project unproject = (time + h*c s, project newState) where
-        zi i = assert (i <= s && i>= 1) $ convergeList $ iterate (zkp1 i) initialGuess where
+        zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $ assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             h' = h * c i
             guessTime = time + h'
@@ -624,9 +656,9 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
                     scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
         state' = unproject state
-        newState = elementAdd state' dy
+        newState = elementAdd state' (assert (not $  null dy) dy)
         dy :: [Multivector t]
-        dy = sumListOfLists $ [map ((b i)*>) (zi i) | i <- [1..s]] 
+        dy = sumListOfLists  [map (b i *>) (zi i) | i <- [1..s]] 
         evalDerivatives :: t -> [Multivector t] -> [Multivector t]
         evalDerivatives time x = unproject $ f time $ project x
 
