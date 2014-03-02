@@ -66,6 +66,7 @@ import Number.Ratio hiding (scale)
 import Algebra.ToRational
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
+import Control.Exception (assert)
 --import Debug.Trace
 trace _ a = a
 
@@ -291,9 +292,10 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
     fromInteger i = scalar $ Algebra.Ring.fromInteger i    
+
+    a ^ 2 = a * a
     a ^ 0 = one
     a ^ 1 = a
-    a ^ 2 = a * a
     --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
     a ^ n  =  multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
 
@@ -411,7 +413,7 @@ wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
-inverse a = reverseMultivector a Clifford./ bScale (head $ mvTerms (a * reverseMultivector a))
+inverse a = assert (a /= zero) $ reverseMultivector a Clifford./ bScale (head $ mvTerms (a * reverseMultivector a))
 recip=Clifford.inverse
 
 instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
@@ -614,7 +616,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     sumListOfLists = (map sumList) . transpose 
     rkMethodImplicitFixedPoint :: RKStepper t stateType
     rkMethodImplicitFixedPoint (time, state) h f project unproject = (time + h*c s, project newState) where
-        zi i = convergeList $ iterate (zkp1 i) initialGuess where
+        zi i = assert (i <= s && i>= 1) $ convergeList $ iterate (zkp1 i) initialGuess where
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             h' = h * c i
             guessTime = time + h'
