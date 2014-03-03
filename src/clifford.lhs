@@ -547,7 +547,7 @@ makeLenses ''ButcherTableau
 rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
 implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
 
-type ConvergerFunction f = [Multivector f] -> Multivector f 
+type ConvergerFunction f = [[Multivector f]] -> [Multivector f]
 type AdaptiveStepSizeFunction f state = f -> state -> f 
 data RKAttribute f state = Explicit
                  | HamiltonianFunction
@@ -641,7 +641,8 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         l = _tableauB tableau
     sumListOfLists = map sumList . transpose 
     converger :: (Ord t, Algebra.Algebraic.C t, Algebra.Absolute.C t) => [[Multivector t]] -> [Multivector t]
-    converger = case  find (isConvergenceTolerance) attributes of
+    converger = case  find (\x -> isConvergenceTolerance x || isConvergenceFunction x) attributes of
+                  Just (ConvergenceFunction conv) -> conv
                   Just (ConvergenceTolerance tol) ->  convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
                   Nothing -> trace "No convergence tolerance specified, defaulting to equality" convergeList
     
