@@ -512,14 +512,13 @@ data DynamicSystem f = DynamicSystem {_time :: f, coordinates :: [Multivector f]
 makeLenses ''EnergyMethod
 makeLenses ''DynamicSystem
 
---evaluateDerivative s = (dq, dp) where
+--evaluateDerivative s = dq++ dp where
 --    dq = (s&energyFunction.dqs) -- s
 --    dp = (s&energyFunction.dps) -- s
 --    dq = map ($ s) ((dqs $ energyFunction) s) --s&energyFunction.dqs.traverse--map ($ s) ((dqs . energyFunction) s)
 --    dp = map ($ s) ((dps $ energyFunction) s)
 
---add function to project to allowable configuration space after each update step 
---use secant or whatever method for fixed point iteration for implicit parts of runge kutta
+
 
 
 rk4Classical :: (Ord a, Algebra.Algebraic.C a) =>  stateType -> a -> (stateType->stateType) -> ([Multivector a] -> stateType) -> (stateType -> [Multivector a]) -> stateType
@@ -556,19 +555,9 @@ data RKAttribute f state = Explicit
                  | ConvergenceFunction {converger :: ConvergerFunction f } 
                  | RootSolver 
                  | UseAutomaticDifferentiationForRootSolver
-                 | StartingGuessMethod --deriving (Show, Eq)-- deriving (Typeable, Data) --this doesn't work and i cbf trying to figure out why
+                 | StartingGuessMethod 
 
-{-$( derive makeEq ''ConvergerFunction)
-$( derive makeShow ''ConvergerFunction)
-$( derive makeEq ''AdaptiveStepSizeFunction)
-$( derive makeShow ''AdaptiveStepSizeFunction)
--- $( derive makeTypeable ''Blade)
--- $( derive makeData ''
-$( derive makeTypeable ''Multivector)
-$( derive makeData ''Multivector)-}
 $( derive makeIs ''RKAttribute)
--- $( derive makeData ''RKAttribute)
--- $( derive makeTypeable ''RKAttribute)
 
 sumVector = sumList . V.toList 
 
@@ -619,7 +608,8 @@ type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t),
     (t,stateType)
 showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
 
-convergeTolLists :: (Ord f, Eq f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f) => f ->  [[Multivector f]] -> [Multivector f]
+convergeTolLists :: (Ord f, Eq f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f) 
+                   => f ->  [[Multivector f]] -> [Multivector f]
 convergeTolLists t [] = error "converge: empty list"
 convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
     where
@@ -627,10 +617,14 @@ convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
       check (a:b:c:_)
           | (trace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
-          | (magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c)) <= t ) = showOutput ("convergence with tolerance "++ show t )$ Just c
+          | ((showOutput ("convergence check with tolerance " ++ show t)$
+              magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t )
+          = showOutput ("convergence with tolerance "++ show t )$ Just c
       check _ = Nothing
 
-genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t, Algebra.Absolute.C t, Algebra.Algebraic.C t) =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
+genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t,
+                                    Algebra.Absolute.C t, Algebra.Algebraic.C t)
+                  =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_tableauC tableau)
     c n = l !!  (n-1) where
@@ -648,7 +642,8 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     
     rkMethodImplicitFixedPoint :: RKStepper t stateType
     rkMethodImplicitFixedPoint (time, state) h f project unproject = (time + h*c s, project newState) where
-        zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $ assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
+        zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
+               assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             h' = h * c i
             guessTime = time + h'
