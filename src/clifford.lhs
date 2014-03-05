@@ -8,7 +8,7 @@
 \setmathfont{latinmodern-math.otf}
 \usepackage{verbatim}
 \author{Sophie Taylor}
-\title{haskell-clifford: A Haskell Clifford algebra library}
+\title{haskell-clifford: A Haskell Clifford algebra dynamics library}
 \begin{document}
 
 So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
@@ -19,14 +19,14 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 %if False
 \begin{code}
-{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 #-}
+{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
 -- OPTIONS_GHC -Odph -fvectorise -package dph-lifted-vseg 
 --  LANGUAGE ParallelArrays
 \end{code}
@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem)
+import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -145,7 +145,7 @@ What is the grade of a blade? Just the number of indices.
 
 \begin{code}
 grade :: Blade f -> Integer
-grade = fromNumber.toInteger.length.bIndices 
+grade = fromNumber . toInteger . length . bIndices 
 
 bladeIsOfGrade :: Blade f -> Integer -> Bool
 blade `bladeIsOfGrade` k = grade blade == k
@@ -266,7 +266,7 @@ multiplyList l = mvNormalForm $ BladeSum listOfBlades where
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
 --                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
 
-sumList xs = mvNormalForm $ BladeSum $ Data.List.Stream.concat $ map mvTerms xs
+sumList xs = mvNormalForm $ BladeSum $ concat $ map mvTerms xs
 
 sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
@@ -301,7 +301,7 @@ instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
     a ^ 0 = one
     a ^ 1 = a
     --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
-    a ^ n  =  multiplyList (Data.List.Stream.replicate (NPN.fromInteger n) a)
+    a ^ n  =  multiplyList (replicate (NPN.fromInteger n) a)
 
 two = fromInteger 2
 mul = (Algebra.Ring.*)
@@ -386,9 +386,9 @@ takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
                      [] -> []
 
-cosh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ expTerms x
+cosh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ expTerms x
 
-sinh x = converge $ shanksTransformation.compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
+sinh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
@@ -524,7 +524,7 @@ makeLenses ''DynamicSystem
 rk4Classical :: (Ord a, Algebra.Algebraic.C a) =>  stateType -> a -> (stateType->stateType) -> ([Multivector a] -> stateType) -> (stateType -> [Multivector a]) -> stateType
 rk4Classical state h f project unproject = project newState where
     update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] / Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
-    newState = map (uncurry (+)) $ Data.List.Stream.zip state' update
+    newState = zipWith (+) state' update
     state' = unproject state
     evalDerivatives x = unproject $ f $ project x
     k1 = map (h*>) $ evalDerivatives state'
@@ -542,12 +542,10 @@ a `elementMul` b = zipWith (*) a b
 data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
 makeLenses ''ButcherTableau
 
---rk4ClassicalTableau :: ButcherTableau NPN.Double
-rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
-implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
 
 type ConvergerFunction f = [[Multivector f]] -> [Multivector f]
 type AdaptiveStepSizeFunction f state = f -> state -> f 
+
 data RKAttribute f state = Explicit
                  | HamiltonianFunction
                  | AdaptiveStepSize {sigma :: AdaptiveStepSizeFunction f state}
@@ -559,13 +557,19 @@ data RKAttribute f state = Explicit
 
 $( derive makeIs ''RKAttribute)
 
+--rk4ClassicalTableau :: ButcherTableau NPN.Double
+rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
+implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
+
+
+
 sumVector = sumList . V.toList 
 
 --systemRootSolver :: [Multivector f] -> [Multivector f] -> ratio -> [Multivector f] -> [Multivector f] -> [Multivector f]
 
 --This will stop as soon as one of the elements converges. This is bad. Need to make it skip convergent ones and focus on the remainig.
 systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
-    update (xm1,jm1) xm2 | elem zero dx =  [(xm1,undefined)]
+    update (xm1,jm1) xm2 | zero `elem` dx =  [(xm1,undefined)]
                    | otherwise = if x == xm1 then [(x,undefined)] else (x,j) : update (x,j) xm1 where
       x = xm1 `elementSub` ( (fm1 `elementMul` dx) `elementMul` ody)
       j = undefined
@@ -600,7 +604,8 @@ lobattoIIIBFourthOrder (t, state) h f = impl (t, state) h f id id where
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
-type RKStepper t stateType = (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => 
+type RKStepper t stateType = 
+    (Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t) => 
     (t, stateType) -> t -> 
     (t -> stateType -> stateType) -> 
     ([Multivector t] -> stateType) -> 
@@ -617,13 +622,13 @@ convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
       check (a:b:c:_)
           | (trace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
-          | ((showOutput ("convergence check with tolerance " ++ show t)$
-              magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t )
-          = showOutput ("convergence with tolerance "++ show t )$ Just c
+          | ((showOutput ("convergence check with tolerance " ++ show t) $ 
+              magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t) = showOutput ("convergence with tolerance "++ show t )$ Just c
       check _ = Nothing
 
-genericRKMethod :: forall t stateType . ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t,
-                                    Algebra.Absolute.C t, Algebra.Algebraic.C t)
+genericRKMethod :: forall t stateType . 
+                  ( Ord t, Show t, Algebra.Module.C t (Multivector t), Algebra.Additive.C t,
+                        Algebra.Absolute.C t, Algebra.Algebraic.C t)
                   =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s =  length (_tableauC tableau)
@@ -634,21 +639,26 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     b i = l !! (i - 1) where
         l = _tableauB tableau
     sumListOfLists = map sumList . transpose 
-    converger :: (Ord t, Algebra.Algebraic.C t, Algebra.Absolute.C t) => [[Multivector t]] -> [Multivector t]
+
+    converger :: (Ord t, Algebra.Algebraic.C t, Algebra.Absolute.C t) =>
+                [[Multivector t]] -> [Multivector t]
     converger = case  find (\x -> isConvergenceTolerance x || isConvergenceFunction x) attributes of
                   Just (ConvergenceFunction conv) -> conv
-                  Just (ConvergenceTolerance tol) ->  convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
+                  Just (ConvergenceTolerance tol) -> convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
                   Nothing -> trace "No convergence tolerance specified, defaulting to equality" convergeList
     
+    
+
     rkMethodImplicitFixedPoint :: RKStepper t stateType
-    rkMethodImplicitFixedPoint (time, state) h f project unproject = (time + h*c s, project newState) where
+    rkMethodImplicitFixedPoint (time, state) h f project unproject =
+        (time + h*c s, project newState) where
         zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
                assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             h' = h * c i
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector t] -> [Multivector t]
-            zkp1 i zk= map (h*>) (sumOfJs i zk) where
+            zkp1 i zk = map (h*>) (sumOfJs i zk) where
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
                     scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
         state' = unproject state
@@ -656,9 +666,28 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         dy :: [Multivector t]
         dy = sumListOfLists  [map (b i *>) (zi i) | i <- [1..s]] 
         evalDerivatives :: t -> [Multivector t] -> [Multivector t]
-        evalDerivatives time x = unproject $ f time $ project x
+        evalDerivatives time = unproject . (f time) . project 
 
+ 
+\end{code}
 
+Now to make a physical object.
+\begin{code}
+data ReferenceFrame t = ReferenceFrame {basisVectors :: [Multivector t]}
+psuedoScalar' :: forall f. (Ord f, Algebra.Ring.C f) => ReferenceFrame f -> Multivector f
+psuedoScalar'  = multiplyList . basisVectors
+psuedoScalar :: forall f. (Ord f, Algebra.Ring.C f) => Integer -> Multivector f
+psuedoScalar n = one `e` [1..n]
+data PhysicalVector t = PhysicalVector {dimension :: Integer, r :: Multivector t, referenceFrame :: ReferenceFrame t}
+squishToDimension (PhysicalVector d r f) = PhysicalVector d r' f where
+    r' = undefined
+data RigidBody f = RigidBody {position :: PhysicalVector f,
+                              momentum :: PhysicalVector f,
+                              mass :: f,
+                              attitude :: PhysicalVector f,
+                              angularMomentum :: PhysicalVector f,
+                              inertia :: PhysicalVector f
+                             }
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
