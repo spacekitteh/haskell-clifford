@@ -19,7 +19,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
-{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax #-}
+{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -35,7 +35,7 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Clifford where
 
-import NumericPrelude hiding (Integer, iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
+import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
 --import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
@@ -47,6 +47,7 @@ import Algebra.Transcendental
 import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
+import Data.Serialize
 import MathObj.Polynomial.Core (progression)
 import System.IO
 import Data.List.Stream
@@ -54,11 +55,12 @@ import Data.Permute (sort, isEven)
 import Data.List.Ordered
 import Data.Ord
 import Data.Maybe
-import Number.NonNegative
+--import Number.NonNegative
+import Numeric.Natural
 import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
 import qualified NumericPrelude.Numeric as NPN
---import qualified Test.QuickCheck as QC
+import Test.QuickCheck
 import Math.Sequence.Converge (convergeBy)
 import Control.DeepSeq 
 import Number.Ratio hiding (scale)
@@ -80,7 +82,8 @@ The first problem: How to represent basis blades. One way to do it is via genera
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
 
-data Blade f = Blade {_scale :: f, _indices :: [Integer]} 
+data Blade f where
+    Blade :: {-(Algebra.Field.C f) => -} {_scale :: f, _indices :: [Natural]} -> Blade f
 
 makeLenses ''Blade
 bScale b =  b^.scale
@@ -95,7 +98,7 @@ instance(Show f) =>  Show (Blade f) where
                                                 
                         
 instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
-    (==) a b = aScale == bScale && aIndices == bIndices where
+   a == b = aScale == bScale && aIndices == bIndices where
                  (Blade aScale aIndices) = bladeNormalForm a
                  (Blade bScale bIndices) = bladeNormalForm b
 
@@ -145,7 +148,7 @@ What is the grade of a blade? Just the number of indices.
 
 \begin{code}
 grade :: Blade f -> Integer
-grade = fromNumber . toInteger . length . bIndices 
+grade = toInteger . length . bIndices 
 
 bladeIsOfGrade :: Blade f -> Integer -> Bool
 blade `bladeIsOfGrade` k = grade blade == k
@@ -213,6 +216,7 @@ A multivector is nothing but a linear combination of basis blades.
 data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq, Ord)
 
 makeLenses ''Multivector
+
 mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
     resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
 mvTerms m = m^.terms
@@ -274,9 +278,10 @@ sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\
 
 
 --Constructs a multivector from a scaled blade.
-e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
+e :: (Algebra.Additive.C f, Ord f) => f -> [Natural] -> Multivector f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 scalar s = s `e` []
+
 
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f)
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade f)
@@ -555,6 +560,7 @@ data RKAttribute f state = Explicit
                  | UseAutomaticDifferentiationForRootSolver
                  | StartingGuessMethod 
 
+
 $( derive makeIs ''RKAttribute)
 
 --rk4ClassicalTableau :: ButcherTableau NPN.Double
@@ -681,13 +687,31 @@ psuedoScalar n = one `e` [1..n]
 data PhysicalVector t = PhysicalVector {dimension :: Integer, r :: Multivector t, referenceFrame :: ReferenceFrame t}
 squishToDimension (PhysicalVector d r f) = PhysicalVector d r' f where
     r' = undefined
-data RigidBody f = RigidBody {position :: PhysicalVector f,
-                              momentum :: PhysicalVector f,
-                              mass :: f,
-                              attitude :: PhysicalVector f,
-                              angularMomentum :: PhysicalVector f,
-                              inertia :: PhysicalVector f
-                             }
+
+
+data RigidBody f where
+ RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) =>  {position :: PhysicalVector f,
+                              _momentum :: PhysicalVector f,
+                              _mass :: f,
+                              _attitude :: PhysicalVector f,
+                              _angularMomentum :: PhysicalVector f,
+                              _inertia :: PhysicalVector f
+                             } -> RigidBody f
+
+makeLenses ''RigidBody
+
+$(derive makeSerialize ''Natural)
+$(derive makeData ''Natural)
+$(derive makeTypeable ''Natural)
+$(derive makeArbitrary ''Natural)
+$(derive makeSerialize ''Blade)
+$(derive makeSerialize ''Multivector)
+$(derive makeData ''Blade)
+$(derive makeTypeable ''Blade)
+$(derive makeData ''Multivector)
+$(derive makeTypeable ''Multivector)
+$(derive makeArbitrary ''Blade)
+$(derive makeArbitrary ''Multivector)
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
