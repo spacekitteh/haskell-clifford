@@ -33,10 +33,10 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 %endif
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
-module Clifford where
+module Numeric.Clifford.Blade where
 
 import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
---import Algebra.Laws
+import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
 import Algebra.Additive
@@ -48,6 +48,7 @@ import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
 import Data.Serialize
+import Data.Word
 import MathObj.Polynomial.Core (progression)
 import System.IO
 import Data.List.Stream
@@ -83,9 +84,13 @@ The first problem: How to represent basis blades. One way to do it is via genera
 \begin{code}
 
 data Blade f where
-    Blade :: {-(Algebra.Field.C f) => -} {_scale :: f, _indices :: [Natural]} -> Blade f
+    Blade :: {-(Algebra.Field.C f) =>-} {_scale :: f, _indices :: [Natural]} -> Blade f
 
-makeLenses ''Blade
+-- makeLenses ''Blade
+scale :: Lens' (Blade f) f
+scale = lens _scale (\blade v -> blade {_scale = v})
+indices :: Lens' (Blade f) [Natural]
+indices = lens _indices (\blade v -> blade {_indices = v})
 bScale b =  b^.scale
 bIndices b = b^.indices
 instance(Show f) =>  Show (Blade f) where
@@ -196,7 +201,7 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
             k = Algebra.Absolute.abs $ grade x - grade y
             xy = bladeMul x y
 
---propBladeDotAssociative = Algebra.Laws.associative bDot
+propBladeDotAssociative = Algebra.Laws.associative bDot
 
 \end{code}
 
@@ -208,7 +213,27 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
     compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
                 | otherwise =  compare (bIndices a) (bIndices b)
+
+
+instance Arbitrary Natural where
+    arbitrary = sized $ \n ->
+                let n' = NPN.abs n in
+                 fmap (toNatural . (\x -> (fromIntegral x)::Word)) (choose (0, n'))
+    shrink = shrinkIntegral
+$(derive makeArbitrary ''Blade)
 \end{code}
+
+Now for some testing of algebraic laws.
+
+\begin{code}
+
+{- Note: Figure out what this is meant to be lol
+skewcommutative op x y = x `op` y == (bladeScaleLeft (fromInteger (-1))$ y `op` x)
+
+propAnticommutativeMultiplication :: (Eq f,Algebra.Ring.C f, Algebra.Additive.C f) => Blade f -> Blade f -> Bool
+propAnticommutativeMultiplication = anticommutative bladeMul
+-}
+propCommutativeAddition = commutative (+)
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
