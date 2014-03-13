@@ -7,25 +7,36 @@
 \setmainfont{latinmodern-math.otf}
 \setmathfont{latinmodern-math.otf}
 \usepackage{verbatim}
+\author{Sophie Taylor}
+\title{haskell-clifford: A Haskell Clifford algebra dynamics library}
 \begin{document}
-So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
+
+So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff once the design has stabilised. 
 
 I am basing the design of this on Issac Trotts' geometric algebra library.\cite{hga}
 
 Let us  begin. We are going to use the Numeric Prelude because it is (shockingly) nicer for numeric stuff.
 
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
+{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
+%if False
+\begin{code}
+{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
+-- OPTIONS_GHC -Odph -fvectorise -package dph-lifted-vseg 
+--  LANGUAGE ParallelArrays
+\end{code}
+%endif
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
-module Clifford  where
-
-import NumericPrelude hiding (Integer)
-import Algebra.Laws
+module Numeric.Clifford.Multivector where
+import Numeric.Clifford.Blade
+import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate, all)
+--import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
 import Algebra.Additive
@@ -36,168 +47,115 @@ import Algebra.Transcendental
 import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
-import MathObj.Polynomial.Core
+import Data.Serialize
+import MathObj.Polynomial.Core (progression)
 import System.IO
-import Data.List
-import Data.Permute
+import Data.List.Stream
+import Data.Permute (sort, isEven)
 import Data.List.Ordered
 import Data.Ord
-import Number.NonNegative
+import Data.Maybe
+--import Number.NonNegative
+import Numeric.Natural
+import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
 import qualified NumericPrelude.Numeric as NPN
-import qualified Test.QuickCheck as QC
-import Math.Sequence.Converge
-import Number.Ratio
-\end{code}
-
-
-The first problem: How to represent basis blades. One way to do it is via generalised Pauli matrices. Another way is to use lists, which we will do because this is Haskell. >:0
-
-\texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
-\begin{code}
-data Blade f = Blade {bScale :: f, bIndices :: [Integer]} 
-instance(Show f) =>  Show (Blade f) where
-    --TODO: Do this with HaTeX
-    show  (Blade scale indices) = pref ++  if indices == [] then "" else basis where
-                        pref = show scale
-                        basis =  foldr (++) "" textIndices
-                        textIndices = map vecced indices
-                        vecced index = "\\vec{e_{" ++ (show index) ++ "}}"
-                                                
-                        
-instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
-    (==) a b = aScale == bScale && aIndices == bIndices where
-                 (Blade aScale aIndices) = bladeNormalForm a
-                 (Blade bScale bIndices) = bladeNormalForm b
+import Test.QuickCheck
+import Math.Sequence.Converge (convergeBy)
+import Control.DeepSeq 
+import Number.Ratio hiding (scale)
+import Algebra.ToRational
+import qualified GHC.Num as PNum
+import Control.Lens hiding (indices)
+import Control.Exception (assert)
+import Data.Maybe
+import Data.Data
+import Data.DeriveTH
+import Debug.Trace
+--trace _ a = a
 
 \end{code}
 
-For example, a scalar could be constructed like so: \texttt{Blade s []}
-\begin{code}
-scalarBlade :: f -> Blade f
-scalarBlade d = Blade d []
-
-zeroBlade :: (Algebra.Additive.C f) => Blade f
-zeroBlade = scalarBlade Algebra.Additive.zero
-
-bladeNonZero b = bScale b /= Algebra.Additive.zero
-
-bladeNegate b = Blade (Algebra.Additive.negate bScale b) (bIndices b)
-
-\end{code}
-
-However, the plain data constructor should never be used, for it doesn't order them by default. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative. Additionally, since $\vec{e}_k^2 = 1$, pairs of them should be removed.
-
-\begin{align}
-\vec{e}_1∧...∧\vec{e}_k∧...∧\vec{e}_k∧... = 0\\
-\vec{e}_2∧\vec{e}_1 = -\vec{e}_1∧\vec{e}_2\\
-\vec{e}_k^2 = 1
-\end{align}
-
-
-\begin{code}
-bladeNormalForm :: (Algebra.Additive.C f) =>  Blade f -> Blade f
-bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
-        where
-             numOfIndices = length indices
-             (sorted, perm) = Data.Permute.sort numOfIndices indices
-             scale' = if isEven perm then scale else Algebra.Additive.negate scale
-             uniqueSorted = removeDupPairs sorted
-                            where
-                              removeDupPairs [] = []
-                              removeDupPairs [x] = [x]
-                              removeDupPairs (x:y:rest) | x == y = removeDupPairs rest
-                                                        | otherwise = x : removeDupPairs (y:rest)
-\end{code}
-
-What is the grade of a blade? Just the number of indices.
-
-\begin{code}
-grade :: Blade f -> Integer
-grade b = fromNumber $ toInteger $ length $ bIndices b
-
-bladeIsOfGrade :: Blade f -> Integer -> Bool
-blade `bladeIsOfGrade` k = grade blade == k
-
-bladeGetGrade ::(Algebra.Additive.C f) =>  Integer -> Blade f -> Blade f
-bladeGetGrade k blade =
-    if blade `bladeIsOfGrade` k then blade else zeroBlade
-\end{code}
-
-
-
-First up for operations: Blade multiplication. This is no more than assembling orthogonal vectors into k-vectors. 
-
-\begin{code}
-bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
-bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
-
-
-
-\end{code}
-
-Next up: The outer (wedge) product, denoted by $∧$ :3
-
-\begin{code}
-bWedge :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
-bWedge x y = bladeNormalForm $ bladeGetGrade k xy
-             where
-               k = (grade x) + (grade y)
-               xy = bladeMul x y
-
-\end{code}
-
-Now let's do the inner (dot) product, denoted by $⋅$ :D
-
-
-\begin{code}
-bDot :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
-bDot x y = bladeNormalForm $ bladeGetGrade k xy
-          where
-            k = Algebra.Absolute.abs $ (grade x) - (grade y)
-            xy = bladeMul x y
-
-propBladeDotAssociative = Algebra.Laws.associative bDot
-
-\end{code}
-
-These are the three fundamental operations on basis blades.
-
-Now for linear combinations of (possibly different basis) blades. To start with, let's order basis blades:
-
-\begin{code}
-instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
-    --compare :: Blade f -> Blade f -> Ordering
-    compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
-                | otherwise =  compare (bIndices a) (bIndices b)
-\end{code}
 
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector f = BladeSum { mvTerms :: [Blade f]} deriving (Show, Eq)
+data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq, Ord)
+
+makeLenses ''Multivector
 
 mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
-    resultant = filter bladeNonZero $ addLikeTerms $ Data.List.Ordered.sortBy compare  $ map bladeNormalForm $ mvTerms mv
+    resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
+mvTerms m = m^.terms
 
-addLikeTerms :: (Algebra.Additive.C f) => [Blade f] -> [Blade f]
-addLikeTerms [] = []
-addLikeTerms [a] = [a]
-addLikeTerms (x:y:rest) | bIndices x == bIndices y =
-                            addLikeTerms $ (Blade (bScale x + bScale y) (bIndices x)) : rest
-                        | otherwise = x : addLikeTerms (y:rest)
+addLikeTerms' = sumLikeTerms . groupLikeTerms
+
+groupLikeTerms ::Eq f =>  [Blade f] -> [[Blade f]]
+groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
+
+compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
+compensatedSum' xs = kahan zero zero xs where
+    kahan s _ [] = s
+    kahan s c (x:xs) = 
+        let y = x - c
+            t = s + y
+        in kahan t ((t-s)-y) xs
+
+--use this to sum taylor series et al with converge
+--compensatedRunningSum :: (Algebra.Additive.C f) => [f] -> [f]
+compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,zero) xs where
+    kahanSum (s,c) b = (t,newc) where
+        y = b - c
+        t = s + y
+        newc = (t - s) - y
+            
+--multiplyAdd a b c = a*b + c
+--twoProduct a b = (x,y) where
+--    x = a*b
+--z    y = multiplyAdd a b (negate x)
+
+--multiplyList [] = []
+--multiplyList a@(x:[])=a
+--multiplyList (a:b:xs) = loop a (b:xs) zero where
+--  loop pm [] ei = pm+ei
+--  loop pm1 (ai:remaining) eim1= loop pi remaining ei where
+--      (pi, pii) = twoProduct pm1 ai
+--      ei = multiplyAdd eim1 ai pii
+
+
+multiplyOutBlades :: Algebra.Ring.C a => [Blade a] -> [Blade a] -> [Blade a]
+multiplyOutBlades x y = [bladeMul l r | l <-x, r <- y]
+
+--multiplyList :: Algebra.Ring.C t => [Multivector t] -> Multivector t
+multiplyList [] = error "Empty list"
+--multiplyList a@(x:[]) = x
+multiplyList l = mvNormalForm $ BladeSum listOfBlades where
+    expandedBlades :: Algebra.Ring.C a => [[Blade a]] -> [Blade a]
+    expandedBlades a = foldl1 multiplyOutBlades a
+    listOfBlades = expandedBlades $ map mvTerms l
+
+--things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
+--                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
+
+sumList xs = mvNormalForm $ BladeSum $ concat $ map mvTerms xs
+
+sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
+sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
+
+
 
 --Constructs a multivector from a scaled blade.
-e :: (Algebra.Additive.C f, Ord f) => f -> [Integer] -> Multivector f
+e :: (Algebra.Additive.C f, Ord f) => f -> [Natural] -> Multivector f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
-
 scalar s = s `e` []
 
 
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f)
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade f)
 instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
-    a - b =  mvNormalForm $ BladeSum ((mvTerms a) ++ (map bladeNegate $ mvTerms b))
-    zero = BladeSum $ [scalarBlade Algebra.Additive.zero]
+    a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
+    zero = BladeSum [scalarBlade Algebra.Additive.zero]
 \end{code}
 
 Now it is time for the Clifford product. :3
@@ -205,17 +163,28 @@ Now it is time for the Clifford product. :3
 \begin{code}
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
+    BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
+    a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
     one = scalar Algebra.Ring.one
-    fromInteger i = scalar $ Algebra.Ring.fromInteger i
+    fromInteger i = scalar $ Algebra.Ring.fromInteger i    
+
+    a ^ 2 = a * a
+    a ^ 0 = one
+    a ^ 1 = a
+    --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
+    a ^ n  =  multiplyList (replicate (NPN.fromInteger n) a)
+
+two = fromInteger 2
+mul = (Algebra.Ring.*)
 \end{code}
 
 Clifford numbers have a magnitude and absolute value:
 
 \begin{code}
 
-magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
-magnitude mv = sqrt $ NumericPrelude.Numeric.sum $ map (\b -> (Algebra.Ring.^) (bScale b) 2) $ mvTerms mv
+--magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
+magnitude = sqrt . compensatedSum' . map (\b -> (bScale b)^ 2) . mvTerms
 
 instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolute.C (Multivector f) where
     abs v =  magnitude v `e` []
@@ -223,85 +192,168 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolut
     signum (BladeSum []) = scalar Algebra.Additive.zero
 
 instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
-  (*>) s v = (scalar s) * v
+--    (*>) zero v = Algebra.Additive.zero
+    (*>) s v = v & mvTerms & map (bladeScaleLeft s) & BladeSum
+
+
 
 (/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
-(/) v d = (Algebra.Field.recip d) *> v
+(/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
 
-(</) n d = (Clifford.inverse d) * n
-(/>) n d = n * Clifford.inverse d
+(</) n d = Numeric.Clifford.Multivector.inverse d * n
+(/>) n d = n * Numeric.Clifford.Multivector.inverse d
 (</>) n d = n /> d
 
-integratePoly c x = c : zipWith (Clifford./) x progression
+integratePoly c x = c : zipWith (Numeric.Clifford.Multivector./) x progression
+
+--converge :: (Eq f, Show f) => [f] -> f
+converge [] = error "converge: empty list"
+converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs) 
+    where
+      empty = error "converge: error in implmentation"
+      checkPeriodic (a:b:c:_)
+          | (trace ("Converging at " ++ show a) a) == b = Just a
+          | a == c = Just a
+      checkPeriodic _ = Nothing
 
 
-exp ::(Algebra.Ring.C f, Eq f, Ord f, Algebra.Field.C f)=> Multivector f -> Multivector f
-exp x = converge $ scanl (+) Algebra.Additive.zero $ expTerms x
+
+aitkensAcceleration [] = []
+aitkensAcceleration a@(xn:[]) = a
+aitkensAcceleration a@(xn:xnp1:[]) = a
+aitkensAcceleration a@(xn:xnp1:xnp2:[]) = a
+aitkensAcceleration (xn:xnp1:xnp2:xs) | xn == xnp1 = [xnp1]
+                                      | xn == xnp2 = [xnp2]
+                                      | otherwise = xn - ((dxn ^ 2) /> ddxn) : aitkensAcceleration (xnp1:xnp2:xs) where
+    dxn = sumList [xnp1,negate xn]
+    ddxn = sumList [xn,  (-2) *  xnp1, xnp2]
+
+shanksTransformation [] = []
+shanksTransformation a@(xnm1:[]) = a
+shanksTransformation a@(xnm1:xn:[]) = a
+shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
+                                       | xnm1 == xnp1 = [xnm1]
+                                       | denominator == zero = [xnp1]
+                                       | otherwise = trace ("Shanks transformation input = " ++ show xn ++ "\nShanks transformation output = " ++ show out) out:shanksTransformation (xn:xnp1:xs) where
+                                       out = numerator />  denominator 
+                                       numerator = sumList [xnp1*xnm1, negate (xn^2)]
+                                       denominator = sumList [xnp1, (-2)*xn, xnm1] 
+
+
+--exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
+exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
+exp x = trace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
+    --todo: compute a ^ p via a^n where n = floor p then multiply remaining power
+    expMag = Algebra.Transcendental.exp mag
+    expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
+    convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
+    mag = trace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
+    scaled = let val = (Numeric.Clifford.Multivector./) x mag in trace ("In exponential, scaled is" ++ show val) val
+
+
+
+
 
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
                      [] -> []
 
-cosh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ expTerms x
+cosh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ expTerms x
 
-sinh x = converge $ scanl (+) Algebra.Additive.zero $ takeEvery 2 $ tail $ expTerms x
+sinh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
 
 
-sin x = converge $ scanl (+) Algebra.Additive.zero $ sinTerms x
+sin x = converge $ shanksTransformation $ compensatedRunningSum $ sinTerms x
 sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
-cos x = converge $ scanl (+) Algebra.Ring.one $ cosTerms x
+cos x = converge $ shanksTransformation $ compensatedRunningSum (Algebra.Ring.one : cosTerms x)
 cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
-expTerms x = [(Clifford./) (power k) (fromInteger $ factorial k) | k <- [(0::NPN.Integer)..]] where
-        power k = (Algebra.Ring.^) x k
-        factorial 0 = 1
-        factorial 1 = 1
-        factorial fac = fac * factorial (fac-1)
+expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Numeric.Clifford.Multivector./ fromInteger n )) (1::NPN.Integer,one)
 
 dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
 (∧) = wedge
 (⋅) = dot
 
-reverseBlade b = bladeNormalForm $ Blade (bScale b) (reverse $ bIndices b)
-reverseMultivector v = mvNormalForm $ BladeSum $ map reverseBlade $ mvTerms v
+reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
+reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
-inverse a = (reverseMultivector a) Clifford./ (bScale $ head $ mvTerms (a * (reverseMultivector a)))
-recip=Clifford.inverse
+inverse a = assert (a /= zero) $ reverseMultivector a Numeric.Clifford.Multivector./ bScale (head $ mvTerms (a * reverseMultivector a))
+recip=Numeric.Clifford.Multivector.inverse
+
+instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
+    toScalar = bScale . bladeGetGrade 0 . head . mvTerms
+    toMaybeScalar (BladeSum [Blade s []]) = Just s
+    toMaybeScalar (BladeSum []) = Just Algebra.Additive.zero
+    toMaybeScalar _ = Nothing
+    fromScalar = scalar
 \end{code}
 
+Also, we may as well implement the standard prelude Num interface.
+
+\begin{code}
+instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) => PNum.Num (Multivector f) where
+    (+) = (Algebra.Additive.+)
+    (-) = (Algebra.Additive.-)
+    (*) = (Algebra.Ring.*)
+    negate = NPN.negate
+    abs = scalar . magnitude 
+    fromInteger = Algebra.Ring.fromInteger
+    signum m = Numeric.Clifford.Multivector.inverse (scalar $ magnitude m) * m
+
+
+\end{code}
+ 
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root ::(Algebra.Field.C f, Algebra.Ring.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f
+root ::(Show f, Eq f,Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
+root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
 root n a = converge $ rootIterationsStart n a one
 
-rootIterationsStart ::(Algebra.Field.C f, Ord f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootIterationsStart n a@(BladeSum ((Blade s []):xs)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero then one else BladeSum[Blade Algebra.Ring.one [1,2]]
+rootIterationsStart ::(Algebra.Field.C f, Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
+                     g = if s >= NPN.zero then one else Algebra.Ring.one `e` [1,2] --BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a g = rootHalleysIterations n a g
 
 
 rootNewtonIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
-rootNewtonIterations n a initialGuess = iterate xkplus1 initialGuess  where
+rootNewtonIterations n a = iterate xkplus1 where
                      xkplus1 xk = xk + deltaxk xk
-                     deltaxk xk = oneOverN * (((Clifford.inverse (xk ^ (n - one)))* a)  - xk)
-                     oneOverN = scalar $ NPN.recip $ fromInteger $  n
+                     deltaxk xk = oneOverN * ((Numeric.Clifford.Multivector.inverse (xk ^ (n - one))* a)  - xk)
+                     oneOverN = scalar $ NPN.recip $ fromInteger n
 
-rootHalleysIterations :: (Algebra.Field.C a, Ord a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
-rootHalleysIterations n a initialGuess = halleysMethod f f' f'' initialGuess where
-    f x = a - (x^ n)
-    f' x = (fromInteger (-n))*(x^(n-1))
-    f'' x = (fromInteger (-(n*(n-1)))) * (x^(n-2))
+rootHalleysIterations :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
+rootHalleysIterations n a = halleysMethod f f' f'' where
+    f x = a - (x^n)
+    f' x = fromInteger (-n) * (x^(n-1))
+    f'' x = fromInteger (-(n*(n-1))) * (x^(n-2))
 
-halleysMethod :: (Algebra.Field.C a, Ord a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
-halleysMethod f f' f'' initialGuess = iterate update initialGuess where
-    update x = x - ((numerator x) * (Clifford.inverse (denominator x))) where
-        numerator x = Algebra.Ring.product1 [fromInteger 2, one, f x, f' x]
-        denominator x = (Algebra.Ring.product1 [fromInteger 2, f' x, f' x]) - ((f x) * (f'' x))
+
+pow a p = (a ^ up) Numeric.Clifford.Multivector./> Numeric.Clifford.Multivector.root down a where
+    ratio = toRational p
+    up = numerator ratio
+    down = denominator ratio
+
+
+halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
+halleysMethod f f' f'' = iterate update where
+    update x = x - (numerator x * Numeric.Clifford.Multivector.inverse (denominator x)) where
+        numerator x = multiplyList [2, fx, dfx]
+        denominator x = multiplyList [2, dfx, dfx] - (fx * ddfx)
+        fx = f x
+        dfx = f' x
+        ddfx = f'' x
+
+
+secantMethod f x0 x1 = update x1 x0  where
+    update xm1 xm2 | xm1 == xm2 = [xm1]
+                   | otherwise = if x == xm1 then [x] else x : update x xm1 where
+      x = xm1 - f xm1 * (xm1-xm2) * Numeric.Clifford.Multivector.inverse (f xm1 - f xm2)
+
 
 \end{code}
 
@@ -309,19 +361,34 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 
 \begin{code}
 
-log a = converge $ halleysMethod f f' f'' $ Clifford.root 3 a where
-    f x = a - Clifford.exp x
-    f' x = NPN.negate $ Clifford.exp x
-    f'' = f'
+normalised a = a * (scalar $ NPN.recip $ magnitude a)
+
+log (BladeSum [Blade s []]) = scalar $ NPN.log s
+log a = scalar (NPN.log mag) + log' scaled where
+    scaled = normalised a
+    mag = magnitude a
+    log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
+         f x = a - Numeric.Clifford.Multivector.exp x
+         f' x = NPN.negate $ Numeric.Clifford.Multivector.exp x
+         f'' = f'
 \end{code}
 
 Now let's do (slow as fuck probably) numerical integration! :D~! Since this is gonna be used for physical applications, it's we're gonna start off with a Hamiltonian structure and then a symplectic integrator.
 
 \begin{code}
 
-data EnergyMethod f = Hamiltonian{ dqs :: [DynamicSystem f -> Multivector f], dps :: [DynamicSystem f -> Multivector f]}
 
-data DynamicSystem f = DynamicSystem { coordinates :: [Multivector f], momenta :: [Multivector f], energyFunction :: EnergyMethod f}
+
+
+{- $(derive makeSerialize ''Blade)
+$(derive makeSerialize ''Multivector)
+$(derive makeData ''Blade)
+$(derive makeTypeable ''Blade)
+$(derive makeData ''Multivector)
+$(derive makeTypeable ''Multivector)-}
+
+$(derive makeArbitrary ''Multivector)
+
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
