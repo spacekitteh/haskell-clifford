@@ -11,7 +11,7 @@
 \title{haskell-clifford: A Haskell Clifford algebra dynamics library}
 \begin{document}
 
-So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
+So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff once the design has stabilised. 
 
 I am basing the design of this on Issac Trotts' geometric algebra library.\cite{hga}
 
@@ -19,7 +19,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
-{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs #-}
+{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -377,48 +377,6 @@ Now let's do (slow as fuck probably) numerical integration! :D~! Since this is g
 
 \begin{code}
 
-data EnergyMethod f = Hamiltonian{ _dqs :: [DynamicSystem f -> Multivector f], _dps :: [DynamicSystem f -> Multivector f]}
-
-data DynamicSystem f = DynamicSystem {_time :: f, coordinates :: [Multivector f], _momenta :: [Multivector f], _energyFunction :: EnergyMethod f, _projector :: DynamicSystem f -> DynamicSystem f}
-
-makeLenses ''EnergyMethod
-makeLenses ''DynamicSystem
-
---evaluateDerivative s = dq++ dp where
---    dq = (s&energyFunction.dqs) -- s
---    dp = (s&energyFunction.dps) -- s
---    dq = map ($ s) ((dqs $ energyFunction) s) --s&energyFunction.dqs.traverse--map ($ s) ((dqs . energyFunction) s)
---    dp = map ($ s) ((dps $ energyFunction) s)
-
-
-
-
-
-\end{code}
-
-Now to make a physical object.
-\begin{code}
-data ReferenceFrame t = ReferenceFrame {basisVectors :: [Multivector t]}
-psuedoScalar' :: forall f. (Ord f, Algebra.Ring.C f) => ReferenceFrame f -> Multivector f
-psuedoScalar'  = multiplyList . basisVectors
-psuedoScalar :: forall f. (Ord f, Algebra.Ring.C f) => Natural -> Multivector f
-psuedoScalar n = one `e` [1..n]
-a `cross` b = (negate $ one)`e`[1,2,3] * (a ∧ b)
-data PhysicalVector t = PhysicalVector {dimension :: Natural, r :: Multivector t, referenceFrame :: ReferenceFrame t}
-squishToDimension (PhysicalVector d (BladeSum terms) f) = PhysicalVector d r' f where
-    r' = BladeSum terms' where
-        terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)
-
-
-data RigidBody f where
- RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) =>  {position :: PhysicalVector f,
-                              _momentum :: PhysicalVector f,
-                              _mass :: f,
-                              _attitude :: PhysicalVector f,
-                              _angularMomentum :: PhysicalVector f,
-                              _inertia :: PhysicalVector f
-                             } -> RigidBody f
-
 
 
 
@@ -430,6 +388,7 @@ $(derive makeData ''Multivector)
 $(derive makeTypeable ''Multivector)-}
 
 $(derive makeArbitrary ''Multivector)
+
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}

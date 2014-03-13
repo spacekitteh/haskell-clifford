@@ -11,11 +11,7 @@
 \title{haskell-clifford: A Haskell Clifford algebra dynamics library}
 \begin{document}
 
-So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
-
-I am basing the design of this on Issac Trotts' geometric algebra library.\cite{hga}
-
-Let us  begin. We are going to use the Numeric Prelude because it is (shockingly) nicer for numeric stuff.
+This is the numeric integration portion of the library. 
 
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
@@ -31,45 +27,30 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 --  LANGUAGE ParallelArrays
 \end{code}
 %endif
-Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
+
 \begin{code}
 module Numeric.Clifford.NumericIntegration where
 import Numeric.Clifford.Multivector as MV
 import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
---import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Algebraic
 import Algebra.Additive
 import Algebra.Ring
-import Algebra.OccasionallyScalar
 import Algebra.ToInteger
-import Algebra.Transcendental
-import Algebra.ZeroTestable
 import Algebra.Module
 import Algebra.Field
-import Data.Serialize
-import Data.Word
-import MathObj.Polynomial.Core (progression)
-import System.IO
 import Data.List.Stream
-import Data.Permute (sort, isEven)
-import Data.List.Ordered
-import Data.Ord
-import Data.Maybe
 import Numeric.Natural
 import qualified Data.Vector as V
 import NumericPrelude.Numeric (sum)
 import qualified NumericPrelude.Numeric as NPN 
 import Test.QuickCheck
 import Math.Sequence.Converge (convergeBy)
-import Control.DeepSeq 
 import Number.Ratio hiding (scale)
 import Algebra.ToRational
-import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
 import Control.Exception (assert)
 import Data.Maybe
-import Data.Data
 import Data.DeriveTH
 import Debug.Trace
 --trace _ a = a
@@ -222,6 +203,20 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         evalDerivatives time = unproject . (f time) . project 
 
 \end{code}
+
+
+
+
+
+
+Look at creating an exponential integrator: https://en.wikipedia.org/wiki/Exponential_integrators
+
+
+
+
+
+
+
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}
 \end{document}

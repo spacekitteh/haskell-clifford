@@ -11,7 +11,7 @@
 \title{haskell-clifford: A Haskell Clifford algebra dynamics library}
 \begin{document}
 
-So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff as I myself understand what the fuck I'm doing. 
+So yeah. This is a Clifford number representation. I will fill out the documentation more fully and stuff once the design has stabilised.
 
 I am basing the design of this on Issac Trotts' geometric algebra library.\cite{hga}
 
