@@ -20,7 +20,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, StandaloneDeriving, KindSignatures, DataKinds #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
@@ -71,6 +71,7 @@ import Control.Exception (assert)
 import Data.Maybe
 import Data.Data
 import Data.DeriveTH
+import GHC.TypeLits
 import Debug.Trace
 --trace _ a = a
 
@@ -80,17 +81,24 @@ import Debug.Trace
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector f = BladeSum { _terms :: [Blade f]} deriving (Show, Eq, Ord)
+data Multivector (n::Nat) f where
+    BladeSum :: forall n f . (SingI n, Algebra.Field.C f, Ord f) => { _terms :: [Blade n f]} -> Multivector n f
 
-makeLenses ''Multivector
+deriving instance Eq (Multivector n f)
+deriving instance Ord (Multivector n f)
+deriving instance (Show f) => Show (Multivector n f)
 
-mvNormalForm mv = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
-    resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $ mv^.terms & map bladeNormalForm
+
+terms :: Lens' (Multivector n f) [Blade n f]
+terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
+
+mvNormalForm (BladeSum terms) = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
+    resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $  map bladeNormalForm $ terms
 mvTerms m = m^.terms
 
 addLikeTerms' = sumLikeTerms . groupLikeTerms
 
-groupLikeTerms ::Eq f =>  [Blade f] -> [[Blade f]]
+groupLikeTerms ::Eq f =>  [Blade n f] -> [[Blade n f]]
 groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
 
 compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
@@ -123,14 +131,13 @@ compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,z
 --      ei = multiplyAdd eim1 ai pii
 
 
-multiplyOutBlades :: Algebra.Ring.C a => [Blade a] -> [Blade a] -> [Blade a]
+multiplyOutBlades :: (SingI n, Algebra.Ring.C a) => [Blade n a] -> [Blade n a] -> [Blade n a]
 multiplyOutBlades x y = [bladeMul l r | l <-x, r <- y]
 
 --multiplyList :: Algebra.Ring.C t => [Multivector t] -> Multivector t
 multiplyList [] = error "Empty list"
 --multiplyList a@(x:[]) = x
 multiplyList l = mvNormalForm $ BladeSum listOfBlades where
-    expandedBlades :: Algebra.Ring.C a => [[Blade a]] -> [Blade a]
     expandedBlades a = foldl1 multiplyOutBlades a
     listOfBlades = expandedBlades $ map mvTerms l
 
@@ -139,20 +146,20 @@ multiplyList l = mvNormalForm $ BladeSum listOfBlades where
 
 sumList xs = mvNormalForm $ BladeSum $ concat $ map mvTerms xs
 
-sumLikeTerms :: (Algebra.Additive.C f) => [[Blade f]] -> [Blade f]
+sumLikeTerms :: (Algebra.Field.C f, SingI n) => [[Blade n f]] -> [Blade n f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
 
 
 
 --Constructs a multivector from a scaled blade.
-e :: (Algebra.Additive.C f, Ord f) => f -> [Natural] -> Multivector f
+e :: (Algebra.Field.C f, Ord f, SingI n) => f -> [Natural] -> Multivector n f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 scalar s = s `e` []
 
 
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector f)
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade f)
-instance (Algebra.Additive.C f, Ord f) => Algebra.Additive.C (Multivector f) where
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector n f)
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade n f)
+instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Additive.C (Multivector n f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
     zero = BladeSum [scalarBlade Algebra.Additive.zero]
@@ -162,7 +169,7 @@ Now it is time for the Clifford product. :3
 
 \begin{code}
 
-instance (Algebra.Ring.C f, Ord f) => Algebra.Ring.C (Multivector f) where
+instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Ring.C (Multivector n f) where
     BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
     a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
@@ -186,18 +193,18 @@ Clifford numbers have a magnitude and absolute value:
 --magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
 magnitude = sqrt . compensatedSum' . map (\b -> (bScale b)^ 2) . mvTerms
 
-instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f) => Algebra.Absolute.C (Multivector f) where
+instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f, SingI n) => Algebra.Absolute.C (Multivector n f) where
     abs v =  magnitude v `e` []
     signum (BladeSum [Blade scale []]) = scalar $ signum scale 
     signum (BladeSum []) = scalar Algebra.Additive.zero
 
-instance (Algebra.Ring.C f, Ord f) => Algebra.Module.C f (Multivector f) where
+instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Module.C f (Multivector n f) where
 --    (*>) zero v = Algebra.Additive.zero
     (*>) s v = v & mvTerms & map (bladeScaleLeft s) & BladeSum
 
 
 
-(/) :: (Algebra.Field.C f, Ord f) => Multivector f -> f -> Multivector f
+(/) :: (Algebra.Field.C f, Ord f, SingI n) => Multivector n f -> f -> Multivector n f
 (/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
 
 (</) n d = Numeric.Clifford.Multivector.inverse d * n
@@ -284,7 +291,7 @@ reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 inverse a = assert (a /= zero) $ reverseMultivector a Numeric.Clifford.Multivector./ bScale (head $ mvTerms (a * reverseMultivector a))
 recip=Numeric.Clifford.Multivector.inverse
 
-instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multivector f) where
+instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.OccasionallyScalar.C f (Multivector n f) where
     toScalar = bScale . bladeGetGrade 0 . head . mvTerms
     toMaybeScalar (BladeSum [Blade s []]) = Just s
     toMaybeScalar (BladeSum []) = Just Algebra.Additive.zero
@@ -295,7 +302,7 @@ instance (Algebra.Additive.C f, Ord f) => Algebra.OccasionallyScalar.C f (Multiv
 Also, we may as well implement the standard prelude Num interface.
 
 \begin{code}
-instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) => PNum.Num (Multivector f) where
+instance (Algebra.Algebraic.C f, SingI n,  Ord f) => PNum.Num (Multivector n f) where
     (+) = (Algebra.Additive.+)
     (-) = (Algebra.Additive.-)
     (*) = (Algebra.Ring.*)
@@ -310,23 +317,23 @@ instance (Algebra.Ring.C f,Algebra.Algebraic.C f, Algebra.Additive.C f, Ord f) =
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root ::(Show f, Eq f,Ord f, Algebra.Algebraic.C f) => NPN.Integer -> Multivector f -> Multivector f
+root :: (Show f, Ord f, Algebra.Algebraic.C f, SingI d) => NPN.Integer -> Multivector d f -> Multivector d f
 root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
-root n a = converge $ rootIterationsStart n a one
+root n a@(BladeSum _) = converge $ rootIterationsStart n a one
 
-rootIterationsStart ::(Algebra.Field.C f, Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector d f -> Multivector d f -> [Multivector d f]
 rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
                      g = if s >= NPN.zero then one else Algebra.Ring.one `e` [1,2] --BladeSum[Blade Algebra.Ring.one [1,2]]
-rootIterationsStart n a g = rootHalleysIterations n a g
+rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
 
 
-rootNewtonIterations :: (Algebra.Field.C f, Ord f) => NPN.Integer -> Multivector f -> Multivector f -> [Multivector f]
+rootNewtonIterations :: (Algebra.Field.C f, Ord f, SingI d) => NPN.Integer -> Multivector d f -> Multivector d f -> [Multivector d f]
 rootNewtonIterations n a = iterate xkplus1 where
                      xkplus1 xk = xk + deltaxk xk
                      deltaxk xk = oneOverN * ((Numeric.Clifford.Multivector.inverse (xk ^ (n - one))* a)  - xk)
                      oneOverN = scalar $ NPN.recip $ fromInteger n
 
-rootHalleysIterations :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => NPN.Integer -> Multivector a -> Multivector a -> [Multivector a]
+rootHalleysIterations :: (Show a, Ord a, Algebra.Algebraic.C a, SingI d) => NPN.Integer -> Multivector d a -> Multivector d a -> [Multivector d a]
 rootHalleysIterations n a = halleysMethod f f' f'' where
     f x = a - (x^n)
     f' x = fromInteger (-n) * (x^(n-1))
@@ -339,7 +346,7 @@ pow a p = (a ^ up) Numeric.Clifford.Multivector./> Numeric.Clifford.Multivector.
     down = denominator ratio
 
 
-halleysMethod :: (Algebra.Field.C a, Show a, Ord a, Algebra.Algebraic.C a) => (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> (Multivector a -> Multivector a) -> Multivector a -> [Multivector a]
+halleysMethod :: (Show a, Ord a, Algebra.Algebraic.C a, SingI d) => (Multivector d a -> Multivector d a) -> (Multivector d a -> Multivector d a) -> (Multivector d a -> Multivector d a) -> Multivector d a -> [Multivector d a]
 halleysMethod f f' f'' = iterate update where
     update x = x - (numerator x * Numeric.Clifford.Multivector.inverse (denominator x)) where
         numerator x = multiplyList [2, fx, dfx]
@@ -387,7 +394,7 @@ $(derive makeTypeable ''Blade)
 $(derive makeData ''Multivector)
 $(derive makeTypeable ''Multivector)-}
 
-$(derive makeArbitrary ''Multivector)
+-- $(derive makeArbitrary ''Multivector)
 
 \end{code}
 \bibliographystyle{IEEEtran}
