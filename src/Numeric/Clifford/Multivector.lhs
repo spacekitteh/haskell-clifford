@@ -69,9 +69,11 @@ import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
 import Control.Exception (assert)
 import Data.Maybe
+import Data.Monoid
 import Data.Data
 import Data.DeriveTH
 import GHC.TypeLits
+import Data.Word
 import Debug.Trace
 --trace _ a = a
 
@@ -88,6 +90,8 @@ deriving instance Eq (Multivector n f)
 deriving instance Ord (Multivector n f)
 deriving instance (Show f) => Show (Multivector n f)
 
+dimension :: forall (n::Nat) f. SingI n => Multivector n f ->  Natural
+dimension _ = toNatural  ((fromIntegral $ fromSing (sing :: Sing n))::Word)
 
 terms :: Lens' (Multivector n f) [Blade n f]
 terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
@@ -150,6 +154,15 @@ sumLikeTerms :: (Algebra.Field.C f, SingI n) => [[Blade n f]] -> [Blade n f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
 
 
+instance (Algebra.Field.C f, SingI n, Ord f) => Data.Monoid.Monoid (Sum (Multivector n f)) where
+    mempty = Data.Monoid.Sum Algebra.Additive.zero
+    mappend (Data.Monoid.Sum x) (Data.Monoid.Sum y)= Data.Monoid.Sum  (x + y)
+    mconcat = Data.Monoid.Sum . sumList . map getSum
+
+instance (Algebra.Field.C f, SingI n, Ord f) => Data.Monoid.Monoid (Product (Multivector n f)) where
+    mempty = Product one
+    mappend (Product x) (Product y) = Product (x * y)
+    mconcat = Product . foldl (*) one . map getProduct
 
 --Constructs a multivector from a scaled blade.
 e :: (Algebra.Field.C f, Ord f, SingI n) => f -> [Natural] -> Multivector n f
@@ -163,6 +176,8 @@ instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Additive.C (Multivector 
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
     zero = BladeSum [scalarBlade Algebra.Additive.zero]
+
+    
 \end{code}
 
 Now it is time for the Clifford product. :3

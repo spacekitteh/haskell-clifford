@@ -29,13 +29,15 @@ This is the numeric integration portion of the library.
 %endif
 
 \begin{code}
+
 module Numeric.Clifford.NumericIntegration where
 import Numeric.Clifford.Multivector as MV
 import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
 import Algebra.Absolute
 import Algebra.Algebraic
-import Algebra.Additive
+import Algebra.Additive hiding (elementAdd, elementSub)
 import Algebra.Ring
+import Data.Monoid
 import Algebra.ToInteger
 import Algebra.Module
 import Algebra.Field
@@ -55,42 +57,13 @@ import GHC.TypeLits
 import Data.DeriveTH
 import Debug.Trace
 --trace _ a = a
-rk4Classical :: (Ord a, Algebra.Algebraic.C a, SingI d) =>  stateType -> a -> (stateType->stateType) -> ([Multivector d a] -> stateType) -> (stateType -> [Multivector d a]) -> stateType
-rk4Classical state h f project unproject = project newState where
-    update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] MV./ Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
-    newState = zipWith (+) state' update
-    state' = unproject state
-    evalDerivatives x = unproject $ f $ project x
-    k1 = map (h*>) $ evalDerivatives state'
-    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (MV./ two) k1)
-    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (MV./ two) k2)
-    k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' k3
-
-rk4ClassicalList state h f = rk4Classical state h f id id
 
 
 elementAdd = zipWith (+)
 elementScale = zipWith (*>) 
 a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
-data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
-makeLenses ''ButcherTableau
 
-
-type ConvergerFunction f = forall (d::Nat) f . [[Multivector d f]] -> [Multivector d f]
-type AdaptiveStepSizeFunction f state = f -> state -> f 
-
-data RKAttribute f state = Explicit
-                 | HamiltonianFunction
-                 | AdaptiveStepSize {sigma :: AdaptiveStepSizeFunction f state}
-                 | ConvergenceTolerance {epsilon :: f}
-                 | ConvergenceFunction {converger :: ConvergerFunction f } 
-                 | RootSolver 
-                 | UseAutomaticDifferentiationForRootSolver
-                 | StartingGuessMethod 
-
-
-$( derive makeIs ''RKAttribute)
 
 --rk4ClassicalTableau :: ButcherTableau NPN.Double
 rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
@@ -117,36 +90,11 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 
 --TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
 
-rk4ClassicalFromTableau (t,state) h f = impl (t, state) h f id id where
-    impl = genericRKMethod rk4ClassicalTableau []
-implicitEulerMethod (t, state) h f = impl (t, state) h f id id where
-    impl = genericRKMethod implicitEulerTableau []
-
-lobattoIIIASecondOrderTableau = ButcherTableau [[0,0],[0.5::NPN.Double,0.5]] [0.5,0.5] [0,1]
-lobattoIIIASecondOrder (t, state) h f = impl (t, state) h f id id where
-    impl = genericRKMethod lobattoIIIASecondOrderTableau []
-
-lobattoIIIAFourthOrderWithTol (t, state) h f = impl (t, state) h f id id where
-    impl = genericRKMethod lobattoIIIAFourthOrderTableau [ConvergenceTolerance 1.0e-8]
-lobattoIIIAFourthOrderTableau = ButcherTableau [[0,0,0],[((5 NPN./24)::NPN.Double),1 NPN./3,-1 NPN./24],[1 NPN./6,2 NPN./3,1 NPN./6]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
-lobattoIIIAFourthOrder (t, state) h f = impl (t, state) h f id id where
-    impl = genericRKMethod lobattoIIIAFourthOrderTableau []
-
-lobattoIIIBFourthOrderTableau = ButcherTableau [[1 NPN./6,(-1) NPN./6,0],[((1 NPN./6)::NPN.Double),1 NPN./3,0],[1 NPN./6,5 NPN./6, 0]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
-lobattoIIIBFourthOrder (t, state) h f = impl (t, state) h f id id where
-    impl = genericRKMethod lobattoIIIBFourthOrderTableau []
 
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
-type RKStepper t stateType = 
-    forall (d::Nat) t stateType . 
-    (Ord t, Show t, Algebra.Module.C t (Multivector d t), Algebra.Additive.C t) => 
-    (t, stateType) -> t -> 
-    (t -> stateType -> stateType) -> 
-    ([Multivector d t] -> stateType) -> 
-    (stateType ->[Multivector d t]) -> 
-    (t,stateType)
+
 showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
 
 convergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI d) 
@@ -162,47 +110,89 @@ convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
               magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t) = showOutput ("convergence with tolerance "++ show t )$ Just c
       check _ = Nothing
 
+type RKStepper (d::Nat) t stateType = 
+    (Ord t, Show t, Algebra.Module.C t (Multivector d t), Algebra.Field.C t) => 
+     t -> (t -> stateType -> stateType) -> 
+    ([Multivector d t] -> stateType) -> 
+    (stateType ->[Multivector d t]) ->
+    (t,stateType) -> (t,stateType)
+data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
+makeLenses ''ButcherTableau
+
+
+type ConvergerFunction f = forall (d::Nat) f . [[Multivector d f]] -> [Multivector d f]
+type AdaptiveStepSizeFunction f state = f -> state -> f 
+
+data RKAttribute f state = Explicit
+                 | HamiltonianFunction
+                 | AdaptiveStepSize {sigma :: AdaptiveStepSizeFunction f state}
+                 | ConvergenceTolerance {epsilon :: f}
+                 | ConvergenceFunction {converger :: ConvergerFunction f } 
+                 | RootSolver 
+                 | UseAutomaticDifferentiationForRootSolver
+                 | StartingGuessMethod 
+
+
+$( derive makeIs ''RKAttribute)
+
 genericRKMethod :: forall (d::Nat) t stateType . 
-                  ( Ord t, Show t, Algebra.Module.C t (Multivector d t), 
-                        Algebra.Absolute.C t, Algebra.Algebraic.C t)
-                  =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper t stateType
+                  ( Ord t, Show t, Algebra.Module.C t (Multivector d t),Algebra.Absolute.C t, Algebra.Algebraic.C t, SingI d)
+                  =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper d t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
+    s :: Int
     s =  length (_tableauC tableau)
+    c :: Int -> t
     c n = l !!  (n-1) where
         l = _tableauC tableau
+    a :: Int -> [t]
     a n = (l !! (n-1)) & filter (/= zero) where
         l = _tableauA tableau
+    b :: Int -> t
     b i = l !! (i - 1) where
         l = _tableauB tableau
+    
+    sumListOfLists :: [[Multivector d t]] -> [Multivector d t]
     sumListOfLists = map sumList . transpose 
 
-    converger :: (Ord t, Algebra.Algebraic.C t, Algebra.Absolute.C t) =>
-                [[Multivector d t]] -> [Multivector d t]
+    converger :: [[Multivector d t]] -> [Multivector d t]
     converger = case  find (\x -> isConvergenceTolerance x || isConvergenceFunction x) attributes of
                   Just (ConvergenceFunction conv) -> conv
                   Just (ConvergenceTolerance tol) -> convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
-                  Nothing -> trace "No convergence tolerance specified, defaulting to equality" convergeList
-    
-    
+                  Nothing -> trace "No convergence tolerance specified, defaulting to equality" convergeList 
 
-    rkMethodImplicitFixedPoint :: RKStepper t stateType
-    rkMethodImplicitFixedPoint (time, state) h f project unproject =
-        (time + h*c s, project newState) where
+    stepSizeAdapter :: AdaptiveStepSizeFunction t stateType
+    stepSizeAdapter = case find isAdaptiveStepSize attributes of
+                        Just (AdaptiveStepSize sigma) -> sigma
+                        Nothing -> (\_ _ -> one)
+
+    rkMethodImplicitFixedPoint :: RKStepper d t stateType
+    rkMethodImplicitFixedPoint h f project unproject (time, state) =
+        (time + (stepSizeAdapter time state)*h*(c s), newState) where
+        zi :: Int -> [Multivector d t]
         zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
                assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
+            initialGuess :: [Multivector d t]
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
-            h' = h * c i
+            adaptiveStepSizeFraction :: t
+            adaptiveStepSizeFraction = stepSizeAdapter time state
+            h' :: t
+            h' = adaptiveStepSizeFraction *  h * (c i)
+            guessTime :: t
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector d t] -> [Multivector d t]
             zkp1 i zk = map (h*>) (sumOfJs i zk) where
+                sumOfJs :: Int -> [Multivector d t] -> [Multivector d t]
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
+                    scaledByAij :: [Multivector d t] -> t -> [Multivector d t]
                     scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
-        state' = unproject state
-        newState = elementAdd state' (assert (not $  null dy) dy)
-        dy :: [Multivector d t]
-        dy = sumListOfLists  [map (b i *>) (zi i) | i <- [1..s]] 
+
+        state' = unproject state :: [Multivector d t]
+        newState :: stateType
+        newState = project $ elementAdd state' (assert (not $  null dy) dy)
+        dy = sumListOfLists  [map ((b i) *>) (zi i) | i <- [1..s]] :: [Multivector d t]
         evalDerivatives :: t -> [Multivector d t] -> [Multivector d t]
-        evalDerivatives time = unproject . (f time) . project 
+        evalDerivatives time stateAtTime= unproject $ (f time) $ project stateAtTime
+
 
 \end{code}
 
@@ -212,8 +202,6 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
 
 
 Look at creating an exponential integrator: https://en.wikipedia.org/wiki/Exponential_integrators
-
-
 
 
 
