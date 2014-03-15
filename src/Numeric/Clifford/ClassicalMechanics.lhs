@@ -105,9 +105,7 @@ data RigidBody (d::Nat) f where
                              } -> RigidBody d f
 
 --makeLenses ''RigidBody doesn't actually work
-{- Things to do Monday: 
-2. Create a n-dimensional vector type where n is a type nat
-3. compose in squishToDimension to mvNormalForm
+{- Things to do: 
 4. create a 1-form type 
 5. figure a way to take exterior product of 1 forms at a type level so i can just go like: omega = df1 ^ df2 ^ df ; omega a b c
 -}

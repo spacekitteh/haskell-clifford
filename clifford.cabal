@@ -10,7 +10,7 @@ name:                clifford
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.0
+version:             0.1.0.2
 
 -- A short (one-line) description of the package.
 synopsis:            A Clifford algebra library
@@ -37,7 +37,7 @@ maintainer:          sophie@traumapony.org
 -- A copyright notice.
 -- copyright:           
 
-category:            Math
+category:            Math, Numerical
 
 build-type:          Simple
 
