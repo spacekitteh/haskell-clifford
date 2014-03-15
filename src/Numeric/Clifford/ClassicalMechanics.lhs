@@ -59,9 +59,9 @@ import Data.Word
 import Debug.Trace
 --trace _ a = a
 
-data EnergyMethod f = Hamiltonian{ _dqs :: [DynamicSystem f -> Multivector f], _dps :: [DynamicSystem f -> Multivector f]}
+data EnergyMethod (d::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem d f -> Multivector d f], _dps :: [DynamicSystem d f -> Multivector d f]}
 
-data DynamicSystem f = DynamicSystem {_time :: f, coordinates :: [Multivector f], _momenta :: [Multivector f], _energyFunction :: EnergyMethod f, _projector :: DynamicSystem f -> DynamicSystem f}
+data DynamicSystem (d::Nat) f = DynamicSystem {_time :: f, coordinates :: [Multivector d f], _momenta :: [Multivector d f], _energyFunction :: EnergyMethod d f, _projector :: DynamicSystem d f -> DynamicSystem d f}
 
 makeLenses ''EnergyMethod
 makeLenses ''DynamicSystem
@@ -80,28 +80,29 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame t = ReferenceFrame {basisVectors :: [Multivector t]}
-psuedoScalar' :: forall f. (Ord f, Algebra.Ring.C f) => ReferenceFrame f -> Multivector f
+data ReferenceFrame (d::Nat) t = ReferenceFrame {basisVectors :: [Multivector d t]}
+psuedoScalar' :: forall f (d::Nat). (Ord f, Algebra.Field.C f, SingI d) => ReferenceFrame d f -> Multivector d f
 psuedoScalar'  = multiplyList . basisVectors
-psuedoScalar :: forall f. (Ord f, Algebra.Ring.C f) => Natural -> Multivector f
-psuedoScalar n = one `e` [1..n]
+psuedoScalar :: forall (d::Nat) f. (Ord f, Algebra.Field.C f, SingI d) =>  Multivector d f
+psuedoScalar = one `e` [1..(toNatural  ((fromIntegral $ fromSing (sing :: Sing d))::Word))] 
+
 a `cross` b = (negate $ one)`e`[1,2,3] * (a ∧ b)
-data PhysicalVector t = PhysicalVector {dimension :: Natural, r :: Multivector t, referenceFrame :: ReferenceFrame t}
-squishToDimension (PhysicalVector d (BladeSum terms) f) = PhysicalVector d r' f where
+data PhysicalVector (d::Nat) t = PhysicalVector {dimension :: Natural, r :: Multivector d t, referenceFrame :: ReferenceFrame d t}
+{-squishToDimension (PhysicalVector d (BladeSum terms) f) = PhysicalVector d r' f where
     r' = BladeSum terms' where
         terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)
 squishToDimension' d (BladeSum terms) = r' where
     r' = BladeSum terms' where
-        terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)
+        terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)-}
 
-data RigidBody f where
- RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) =>  {position :: PhysicalVector f,
-                              _momentum :: PhysicalVector f,
+data RigidBody (d::Nat) f where
+ RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector d f)) =>  {position :: PhysicalVector d f,
+                              _momentum :: PhysicalVector d f,
                               _mass :: f,
-                              _attitude :: PhysicalVector f,
-                              _angularMomentum :: PhysicalVector f,
-                              _inertia :: PhysicalVector f
-                             } -> RigidBody f
+                              _attitude :: PhysicalVector d f,
+                              _angularMomentum :: PhysicalVector d f,
+                              _inertia :: PhysicalVector d f
+                             } -> RigidBody d f
 
 --makeLenses ''RigidBody doesn't actually work
 {- Things to do Monday: 
@@ -111,8 +112,8 @@ data RigidBody f where
 5. figure a way to take exterior product of 1 forms at a type level so i can just go like: omega = df1 ^ df2 ^ df ; omega a b c
 -}
 
-data NDVector (n :: Nat) f where
- NDVector :: (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) => {value :: Multivector f} -> NDVector n f
+{-data NDVector (n :: Nat) f where
+ NDVector :: (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) => {value :: Multivector f} -> NDVector n f-}
 
 {-ndVector :: forall n.(n ~ Nat) => Proxy n -> (forall f.
                   (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) =>

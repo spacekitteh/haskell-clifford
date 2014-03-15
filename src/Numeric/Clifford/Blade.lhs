@@ -20,8 +20,8 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleInstances,  UnicodeSyntax, GADTs, KindSignatures, DataKinds #-}
+{-# LANGUAGE TemplateHaskell, StandaloneDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 %if False
@@ -38,40 +38,20 @@ module Numeric.Clifford.Blade where
 import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
 import Algebra.Laws
 import Algebra.Absolute
-import Algebra.Algebraic
 import Algebra.Additive
 import Algebra.Ring
-import Algebra.OccasionallyScalar
-import Algebra.ToInteger
-import Algebra.Transcendental
-import Algebra.ZeroTestable
-import Algebra.Module
-import Algebra.Field
 import Data.Serialize
 import Data.Word
-import MathObj.Polynomial.Core (progression)
-import System.IO
 import Data.List.Stream
 import Data.Permute (sort, isEven)
-import Data.List.Ordered
-import Data.Ord
-import Data.Maybe
---import Number.NonNegative
 import Numeric.Natural
-import qualified Data.Vector as V
-import NumericPrelude.Numeric (sum)
 import qualified NumericPrelude.Numeric as NPN
 import Test.QuickCheck
-import Math.Sequence.Converge (convergeBy)
-import Control.DeepSeq 
-import Number.Ratio hiding (scale)
-import Algebra.ToRational
-import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
-import Control.Exception (assert)
-import Data.Maybe
-import Data.Data
 import Data.DeriveTH
+import GHC.TypeLits hiding (isEven)
+import GHC.Real (fromIntegral)
+import Algebra.Field
 import Debug.Trace
 --trace _ a = a
 
@@ -83,17 +63,19 @@ The first problem: How to represent basis blades. One way to do it is via genera
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
 
-data Blade f where
-    Blade :: {-(Algebra.Field.C f) =>-} {_scale :: f, _indices :: [Natural]} -> Blade f
+data Blade (n :: Nat) f where
+    Blade :: forall n f . (SingI n, Algebra.Field.C f) => {_scale :: f, _indices :: [Natural]} -> Blade n f
 
 -- makeLenses ''Blade
-scale :: Lens' (Blade f) f
+scale :: Lens' (Blade n f) f
 scale = lens _scale (\blade v -> blade {_scale = v})
-indices :: Lens' (Blade f) [Natural]
+indices :: Lens' (Blade n f) [Natural]
 indices = lens _indices (\blade v -> blade {_indices = v})
+dimension :: forall (n::Nat) f. SingI n => Blade n f ->  Natural
+dimension _ = toNatural  ((GHC.Real.fromIntegral $ fromSing (sing :: Sing n))::Word)
 bScale b =  b^.scale
 bIndices b = b^.indices
-instance(Show f) =>  Show (Blade f) where
+instance(Show f) =>  Show (Blade n f) where
     --TODO: Do this with HaTeX
     show  (Blade scale indices) = pref ++  if null indices then "" else basis where
                         pref = show scale
@@ -102,7 +84,7 @@ instance(Show f) =>  Show (Blade f) where
                         vecced index = "\\vec{e_{" ++ show index ++ "}}"
                                                 
                         
-instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
+instance (Algebra.Additive.C f, Eq f) => Eq (Blade n f) where
    a == b = aScale == bScale && aIndices == bIndices where
                  (Blade aScale aIndices) = bladeNormalForm a
                  (Blade bScale bIndices) = bladeNormalForm b
@@ -111,10 +93,10 @@ instance (Algebra.Additive.C f, Eq f) => Eq (Blade f) where
 
 For example, a scalar could be constructed like so: \texttt{Blade s []}
 \begin{code}
-scalarBlade :: f -> Blade f
+scalarBlade :: (Algebra.Field.C f, SingI n) => f -> Blade n f
 scalarBlade d = Blade d []
 
-zeroBlade :: (Algebra.Additive.C f) => Blade f
+zeroBlade :: (Algebra.Field.C f, SingI n) => Blade n f
 zeroBlade = scalarBlade Algebra.Additive.zero
 
 bladeNonZero b = b^.scale /= Algebra.Additive.zero
@@ -135,9 +117,11 @@ However, the plain data constructor should never be used, for it doesn't order t
 
 
 \begin{code}
-bladeNormalForm :: (Algebra.Additive.C f) =>  Blade f -> Blade f
-bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
+bladeNormalForm :: forall (n::Nat) f. Blade n f -> Blade n f
+bladeNormalForm (Blade scale indices)  = result 
         where
+             result = if (any (\i -> (GHC.Real.fromIntegral i) >n') indices) then trace "Blade contains vector with i > d" zeroBlade else Blade scale' uniqueSorted
+             n' = fromSing (sing :: Sing n)
              numOfIndices = length indices
              (sorted, perm) = Data.Permute.sort numOfIndices indices
              scale' = if isEven perm then scale else negate scale
@@ -152,14 +136,14 @@ bladeNormalForm (Blade scale indices)  = Blade scale' uniqueSorted
 What is the grade of a blade? Just the number of indices.
 
 \begin{code}
-grade :: Blade f -> Integer
+grade :: Blade n f -> Integer
 grade = toInteger . length . bIndices 
 
-bladeIsOfGrade :: Blade f -> Integer -> Bool
+bladeIsOfGrade :: Blade n f -> Integer -> Bool
 blade `bladeIsOfGrade` k = grade blade == k
 
-bladeGetGrade ::(Algebra.Additive.C f) =>  Integer -> Blade f -> Blade f
-bladeGetGrade k blade =
+bladeGetGrade :: Integer -> Blade n f -> Blade n f
+bladeGetGrade k blade@(Blade _ _) =
     if blade `bladeIsOfGrade` k then blade else zeroBlade
 \end{code}
 
@@ -168,9 +152,9 @@ bladeGetGrade k blade =
 First up for operations: Blade multiplication. This is no more than assembling orthogonal vectors into k-vectors. 
 
 \begin{code}
-bladeMul :: (Algebra.Ring.C f) => Blade f -> Blade f-> Blade f
-bladeMul x y = bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
-multiplyBladeList :: Algebra.Ring.C f => [Blade f] -> Blade f
+bladeMul ::  Blade n f -> Blade n f-> Blade n f
+bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y)
+multiplyBladeList :: (SingI n, Algebra.Field.C f) => [Blade n f] -> Blade n f
 multiplyBladeList [] = error "Empty blade list!"
 multiplyBladeList (a:[]) = a
 multiplyBladeList a = bladeNormalForm $ Blade scale indices where
@@ -183,7 +167,7 @@ multiplyBladeList a = bladeNormalForm $ Blade scale indices where
 Next up: The outer (wedge) product, denoted by $∧$ :3
 
 \begin{code}
-bWedge :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
+bWedge :: Blade n f -> Blade n f -> Blade n f
 bWedge x y = bladeNormalForm $ bladeGetGrade k xy
              where
                k = grade x + grade y
@@ -195,7 +179,7 @@ Now let's do the inner (dot) product, denoted by $⋅$ :D
 
 
 \begin{code}
-bDot :: (Algebra.Ring.C f) => Blade f -> Blade f -> Blade f
+bDot ::Blade n f -> Blade n f -> Blade n f
 bDot x y = bladeNormalForm $ bladeGetGrade k xy
           where
             k = Algebra.Absolute.abs $ grade x - grade y
@@ -210,7 +194,7 @@ These are the three fundamental operations on basis blades.
 Now for linear combinations of (possibly different basis) blades. To start with, let's order basis blades:
 
 \begin{code}
-instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
+instance (Algebra.Additive.C f, Ord f) => Ord (Blade n f) where
     compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
                 | otherwise =  compare (bIndices a) (bIndices b)
 
@@ -218,9 +202,9 @@ instance (Algebra.Additive.C f, Ord f) => Ord (Blade f) where
 instance Arbitrary Natural where
     arbitrary = sized $ \n ->
                 let n' = NPN.abs n in
-                 fmap (toNatural . (\x -> (fromIntegral x)::Word)) (choose (0, n'))
+                 fmap (toNatural . (\x -> (GHC.Real.fromIntegral x)::Word)) (choose (0, n'))
     shrink = shrinkIntegral
-$(derive makeArbitrary ''Blade)
+-- $(derive makeArbitrary ''Blade)
 \end{code}
 
 Now for some testing of algebraic laws.
