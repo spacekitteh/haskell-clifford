@@ -21,7 +21,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs #-}
 {-# LANGUAGE FlexibleInstances,  UnicodeSyntax, GADTs, KindSignatures, DataKinds #-}
-{-# LANGUAGE TemplateHaskell, StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell, StandaloneDeriving, TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 %if False
@@ -117,13 +117,13 @@ However, the plain data constructor should never be used, for it doesn't order t
 
 
 \begin{code}
-bladeNormalForm :: forall (p::Nat) (q::Nat) f. Blade p q f -> Blade p q f
+bladeNormalForm :: forall (p::Nat) (q::Nat) f.  Blade p q f -> Blade p q f
 bladeNormalForm (Blade scale indices)  = result 
         where
-             result = if (any (\i -> (GHC.Real.toInteger i) > d) indices) then trace "Blade contains vector with i > d" zeroBlade else Blade scale' uniqueSorted
+             result = if (any (\i -> (GHC.Real.toInteger i) >= d) indices) then trace "Blade contains vector with i >= d" zeroBlade else Blade scale' uniqueSorted
              p' = (fromSing (sing :: Sing p)) :: Integer
              q' = (fromSing (sing :: Sing q)) :: Integer
-             d = p' + q' 
+             d = p' + q'
              numOfIndices = length indices
              (sorted, perm) = Data.Permute.sort numOfIndices indices
              scale' = if (isEven perm) /= (negated)  then scale else negate scale
@@ -133,7 +133,7 @@ bladeNormalForm (Blade scale indices)  = result
                               removeDupPairs accum [] negated = (accum,negated)
                               removeDupPairs accum [x] negated = (accum++[x],negated)
                               removeDupPairs accum (x:y:rest) negated  | x == y  = 
-                                                                            if  GHC.Real.toInteger x >  p' 
+                                                                            if  GHC.Real.toInteger x <  q' 
                                                                             then removeDupPairs accum rest (not negated)
                                                                             else removeDupPairs accum rest negated
                                                         | otherwise = removeDupPairs (accum++[x]) (y:rest) negated
