@@ -21,7 +21,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, KindSignatures, DataKinds #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 %if False
@@ -199,6 +199,11 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multive
 
 two = fromInteger 2
 mul = (Algebra.Ring.*)
+
+psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q, SingI (p+q)) =>  Multivector p q f
+psuedoScalar = one `e` [1..(toNatural d)] where
+    d = fromIntegral (fromSing (sing :: Sing (p+q)) )::Word
+
 \end{code}
 
 Clifford numbers have a magnitude and absolute value:

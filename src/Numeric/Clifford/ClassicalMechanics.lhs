@@ -83,9 +83,7 @@ Now to make a physical object.
 data ReferenceFrame (p::Nat) (q::Nat) t = ReferenceFrame {basisVectors :: [Multivector p q t]}
 psuedoScalar' :: forall f (p::Nat) (q::Nat). (Ord f, Algebra.Field.C f, SingI p, SingI q) => ReferenceFrame p q f -> Multivector p q f
 psuedoScalar'  = multiplyList . basisVectors
-psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q, SingI (p+q)) =>  Multivector p q f
-psuedoScalar = one `e` [1..(toNatural d)] where
-    d = fromIntegral (fromSing (sing :: Sing (p+q)) )::Word
+
 
 
 a `cross` b = (negate $ one)`e`[1,2,3] * (a ∧ b)
