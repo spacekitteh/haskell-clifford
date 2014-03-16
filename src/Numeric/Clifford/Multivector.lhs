@@ -88,7 +88,7 @@ data Multivector (p::Nat) (q::Nat) f where
     BladeSum :: forall p q f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
 
 instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f, Ord f) => Arbitrary (Multivector p q f) where
-    arbitrary = mvNormalForm <$> BladeSum <$> (vector (3*d)) where
+    arbitrary = mvNormalForm <$> BladeSum <$> (vector d) where
        p' = (fromSing (sing :: Sing p)) :: Integer
        q' = (fromSing (sing :: Sing q)) 
        d = fromIntegral (p' + q')
@@ -112,6 +112,9 @@ addLikeTerms' = sumLikeTerms . groupLikeTerms
 
 groupLikeTerms ::Eq f =>  [Blade p q f] -> [[Blade p q f]]
 groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
+
+compareTol :: (Algebra.Algebraic.C f, Algebra.Absolute.C f, Ord f, SingI p, SingI q) => Multivector p q f -> Multivector p q f -> f -> Bool
+compareTol x y tol = ((NPN.abs $ magnitude (x-y) ) <= tol)
 
 compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
 compensatedSum' xs = kahan zero zero xs where
