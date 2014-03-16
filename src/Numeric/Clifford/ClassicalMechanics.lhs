@@ -86,22 +86,17 @@ psuedoScalar'  = multiplyList . basisVectors
 
 
 
-a `cross` b = (negate $ one)`e`[1,2,3] * (a ∧ b)
-data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {dimension :: Natural, r :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
-{-squishToDimension (PhysicalVector d (BladeSum terms) f) = PhysicalVector d r' f where
-    r' = BladeSum terms' where
-        terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)
-squishToDimension' d (BladeSum terms) = r' where
-    r' = BladeSum terms' where
-        terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)-}
+a `cross` b = (negate $ one)`e`[0,1,2] * (a ∧ b)
+data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {r :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
+
 
 data RigidBody (p::Nat) (q::Nat) f where
  RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector p q f)) =>  {position :: PhysicalVector p q f,
-                              _momentum :: PhysicalVector p q f,
-                              _mass :: f,
-                              _attitude :: PhysicalVector p q f,
-                              _angularMomentum :: PhysicalVector p q f,
-                              _inertia :: PhysicalVector p q f
+                              momentum :: PhysicalVector p q f,
+                              mass :: f,
+                              attitude :: PhysicalVector p q f,
+                              angularMomentum :: PhysicalVector p q f,
+                              inertia :: PhysicalVector p q f
                              } -> RigidBody p q f
 
 --makeLenses ''RigidBody doesn't actually work
@@ -110,15 +105,8 @@ data RigidBody (p::Nat) (q::Nat) f where
 5. figure a way to take exterior product of 1 forms at a type level so i can just go like: omega = df1 ^ df2 ^ df ; omega a b c
 -}
 
-{-data NDVector (n :: Nat) f where
- NDVector :: (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) => {value :: Multivector f} -> NDVector n f-}
-
-{-ndVector :: forall n.(n ~ Nat) => Proxy n -> (forall f.
-                  (Algebra.Field.C f, Algebra.Module.C f (Multivector f)) =>
-                  Multivector f -> NDVector (n) f)
-ndVector _ value = NDVector $ squishToDimension' (toNatural nummed) value where
-    nummed :: Word32
-    nummed = fromIntegral $ fromSing (sing :: Sing n)-}
+type Vector3 f = forall f.  Multivector 3 0 f
+type STVector f = Multivector 3 1 f
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}

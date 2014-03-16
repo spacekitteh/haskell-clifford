@@ -345,7 +345,7 @@ root n a@(BladeSum _) = converge $ rootIterationsStart n a one
 
 rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero then one else Algebra.Ring.one `e` [1,2] --BladeSum[Blade Algebra.Ring.one [1,2]]
+                     g = if s >= NPN.zero then one else Algebra.Ring.one `e` [0,1] --BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
 
 
