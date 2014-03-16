@@ -59,9 +59,9 @@ import Data.Word
 import Debug.Trace
 --trace _ a = a
 
-data EnergyMethod (d::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem d f -> Multivector d f], _dps :: [DynamicSystem d f -> Multivector d f]}
+data EnergyMethod (p::Nat) (q::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem p q f -> Multivector p q f], _dps :: [DynamicSystem p q f -> Multivector p q f]}
 
-data DynamicSystem (d::Nat) f = DynamicSystem {_time :: f, coordinates :: [Multivector d f], _momenta :: [Multivector d f], _energyFunction :: EnergyMethod d f, _projector :: DynamicSystem d f -> DynamicSystem d f}
+data DynamicSystem (p::Nat) (q::Nat) f = DynamicSystem {_time :: f, coordinates :: [Multivector p q f], _momenta :: [Multivector p q f], _energyFunction :: EnergyMethod p q f, _projector :: DynamicSystem p q f -> DynamicSystem p q f}
 
 makeLenses ''EnergyMethod
 makeLenses ''DynamicSystem
@@ -80,14 +80,17 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame (d::Nat) t = ReferenceFrame {basisVectors :: [Multivector d t]}
-psuedoScalar' :: forall f (d::Nat). (Ord f, Algebra.Field.C f, SingI d) => ReferenceFrame d f -> Multivector d f
+data ReferenceFrame (p::Nat) (q::Nat) t = ReferenceFrame {basisVectors :: [Multivector p q t]}
+psuedoScalar' :: forall f (p::Nat) (q::Nat). (Ord f, Algebra.Field.C f, SingI p, SingI q) => ReferenceFrame p q f -> Multivector p q f
 psuedoScalar'  = multiplyList . basisVectors
-psuedoScalar :: forall (d::Nat) f. (Ord f, Algebra.Field.C f, SingI d) =>  Multivector d f
-psuedoScalar = one `e` [1..(toNatural  ((fromIntegral $ fromSing (sing :: Sing d))::Word))] 
+psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q) =>  Multivector p q f
+psuedoScalar = one `e` [1..(toNatural d)] where
+    d = fromIntegral (p' + q')::Word
+    p' =fromSing (sing :: Sing q)
+    q' =fromSing (sing :: Sing p)
 
 a `cross` b = (negate $ one)`e`[1,2,3] * (a ∧ b)
-data PhysicalVector (d::Nat) t = PhysicalVector {dimension :: Natural, r :: Multivector d t, referenceFrame :: ReferenceFrame d t}
+data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {dimension :: Natural, r :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
 {-squishToDimension (PhysicalVector d (BladeSum terms) f) = PhysicalVector d r' f where
     r' = BladeSum terms' where
         terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)
@@ -95,14 +98,14 @@ squishToDimension' d (BladeSum terms) = r' where
     r' = BladeSum terms' where
         terms' = terms & filter (\(Blade _ ind) -> all (\k -> k <= d) ind)-}
 
-data RigidBody (d::Nat) f where
- RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector d f)) =>  {position :: PhysicalVector d f,
-                              _momentum :: PhysicalVector d f,
+data RigidBody (p::Nat) (q::Nat) f where
+ RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector p q f)) =>  {position :: PhysicalVector p q f,
+                              _momentum :: PhysicalVector p q f,
                               _mass :: f,
-                              _attitude :: PhysicalVector d f,
-                              _angularMomentum :: PhysicalVector d f,
-                              _inertia :: PhysicalVector d f
-                             } -> RigidBody d f
+                              _attitude :: PhysicalVector p q f,
+                              _angularMomentum :: PhysicalVector p q f,
+                              _inertia :: PhysicalVector p q f
+                             } -> RigidBody p q f
 
 --makeLenses ''RigidBody doesn't actually work
 {- Things to do: 

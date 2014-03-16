@@ -97,8 +97,8 @@ convergeList = converge
 
 showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
 
-convergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI d) 
-                   => f ->  [[Multivector d f]] -> [Multivector d f]
+convergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
+                   => f ->  [[Multivector p q f]] -> [Multivector p q f]
 convergeTolLists t [] = error "converge: empty list"
 convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
     where
@@ -110,17 +110,17 @@ convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
               magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t) = showOutput ("convergence with tolerance "++ show t )$ Just c
       check _ = Nothing
 
-type RKStepper (d::Nat) t stateType = 
-    (Ord t, Show t, Algebra.Module.C t (Multivector d t), Algebra.Field.C t) => 
+type RKStepper (p::Nat) (q::Nat) t stateType = 
+    (Ord t, Show t, Algebra.Module.C t (Multivector p q t), Algebra.Field.C t) => 
      t -> (t -> stateType -> stateType) -> 
-    ([Multivector d t] -> stateType) -> 
-    (stateType ->[Multivector d t]) ->
+    ([Multivector p q t] -> stateType) -> 
+    (stateType ->[Multivector p q t]) ->
     (t,stateType) -> (t,stateType)
 data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
 makeLenses ''ButcherTableau
 
 
-type ConvergerFunction f = forall (d::Nat) f . [[Multivector d f]] -> [Multivector d f]
+type ConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
 type AdaptiveStepSizeFunction f state = f -> state -> f 
 
 data RKAttribute f state = Explicit
@@ -135,9 +135,9 @@ data RKAttribute f state = Explicit
 
 $( derive makeIs ''RKAttribute)
 
-genericRKMethod :: forall (d::Nat) t stateType . 
-                  ( Ord t, Show t, Algebra.Module.C t (Multivector d t),Algebra.Absolute.C t, Algebra.Algebraic.C t, SingI d)
-                  =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper d t stateType
+genericRKMethod :: forall (p::Nat) (q::Nat) t stateType . 
+                  ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, SingI p, SingI q)
+                  =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper p q t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s :: Int
     s =  length (_tableauC tableau)
@@ -151,10 +151,10 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     b i = l !! (i - 1) where
         l = _tableauB tableau
     
-    sumListOfLists :: [[Multivector d t]] -> [Multivector d t]
+    sumListOfLists :: [[Multivector p q t]] -> [Multivector p q t]
     sumListOfLists = map sumList . transpose 
 
-    converger :: [[Multivector d t]] -> [Multivector d t]
+    converger :: [[Multivector p q t]] -> [Multivector p q t]
     converger = case  find (\x -> isConvergenceTolerance x || isConvergenceFunction x) attributes of
                   Just (ConvergenceFunction conv) -> conv
                   Just (ConvergenceTolerance tol) -> convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
@@ -165,13 +165,13 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                         Just (AdaptiveStepSize sigma) -> sigma
                         Nothing -> (\_ _ -> one)
 
-    rkMethodImplicitFixedPoint :: RKStepper d t stateType
+    rkMethodImplicitFixedPoint :: RKStepper p q t stateType
     rkMethodImplicitFixedPoint h f project unproject (time, state) =
         (time + (stepSizeAdapter time state)*h*(c s), newState) where
-        zi :: Int -> [Multivector d t]
+        zi :: Int -> [Multivector p q t]
         zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
                assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
-            initialGuess :: [Multivector d t]
+            initialGuess :: [Multivector p q t]
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             adaptiveStepSizeFraction :: t
             adaptiveStepSizeFraction = stepSizeAdapter time state
@@ -179,18 +179,18 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
             h' = adaptiveStepSizeFraction *  h * (c i)
             guessTime :: t
             guessTime = time + h'
-            zkp1 :: NPN.Int -> [Multivector d t] -> [Multivector d t]
+            zkp1 :: NPN.Int -> [Multivector p q t] -> [Multivector p q t]
             zkp1 i zk = map (h*>) (sumOfJs i zk) where
-                sumOfJs :: Int -> [Multivector d t] -> [Multivector d t]
+                sumOfJs :: Int -> [Multivector p q t] -> [Multivector p q t]
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
-                    scaledByAij :: [Multivector d t] -> t -> [Multivector d t]
+                    scaledByAij :: [Multivector p q t] -> t -> [Multivector p q t]
                     scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
 
-        state' = unproject state :: [Multivector d t]
+        state' = unproject state :: [Multivector p q t]
         newState :: stateType
         newState = project $ elementAdd state' (assert (not $  null dy) dy)
-        dy = sumListOfLists  [map ((b i) *>) (zi i) | i <- [1..s]] :: [Multivector d t]
-        evalDerivatives :: t -> [Multivector d t] -> [Multivector d t]
+        dy = sumListOfLists  [map ((b i) *>) (zi i) | i <- [1..s]] :: [Multivector p q t]
+        evalDerivatives :: t -> [Multivector p q t] -> [Multivector p q t]
         evalDerivatives time stateAtTime= unproject $ (f time) $ project stateAtTime
 
 
