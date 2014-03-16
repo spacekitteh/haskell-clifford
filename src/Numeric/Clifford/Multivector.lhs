@@ -200,9 +200,11 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multive
 two = fromInteger 2
 mul = (Algebra.Ring.*)
 
-psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q, SingI (p+q)) =>  Multivector p q f
-psuedoScalar = one `e` [1..(toNatural d)] where
-    d = fromIntegral (fromSing (sing :: Sing (p+q)) )::Word
+psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q) =>  Multivector p q f
+psuedoScalar = one `e` [0..(toNatural d)] where
+    d = fromIntegral (p' + q' - 1 )::Word
+    p'= fromSing (sing :: Sing p)
+    q' = fromSing (sing :: Sing q)
 
 \end{code}
 
