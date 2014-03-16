@@ -16,7 +16,7 @@ This is the classical mechanics portion of the library.
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs, KindSignatures, DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, TypeOperators #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
@@ -83,11 +83,10 @@ Now to make a physical object.
 data ReferenceFrame (p::Nat) (q::Nat) t = ReferenceFrame {basisVectors :: [Multivector p q t]}
 psuedoScalar' :: forall f (p::Nat) (q::Nat). (Ord f, Algebra.Field.C f, SingI p, SingI q) => ReferenceFrame p q f -> Multivector p q f
 psuedoScalar'  = multiplyList . basisVectors
-psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q) =>  Multivector p q f
+psuedoScalar :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q, SingI (p+q)) =>  Multivector p q f
 psuedoScalar = one `e` [1..(toNatural d)] where
-    d = fromIntegral (p' + q')::Word
-    p' =fromSing (sing :: Sing q)
-    q' =fromSing (sing :: Sing p)
+    d = fromIntegral (fromSing (sing :: Sing (p+q)) )::Word
+
 
 a `cross` b = (negate $ one)`e`[1,2,3] * (a ∧ b)
 data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {dimension :: Natural, r :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
