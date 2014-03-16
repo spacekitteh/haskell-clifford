@@ -83,17 +83,17 @@ import Debug.Trace
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
-data Multivector (n::Nat) f where
-    BladeSum :: forall n f . (SingI n, Algebra.Field.C f, Ord f) => { _terms :: [Blade n f]} -> Multivector n f
+data Multivector (p::Nat) (q::Nat) f where
+    BladeSum :: forall p q f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
 
-deriving instance Eq (Multivector n f)
-deriving instance Ord (Multivector n f)
-deriving instance (Show f) => Show (Multivector n f)
+deriving instance Eq (Multivector p q f)
+deriving instance Ord (Multivector p q f)
+deriving instance (Show f) => Show (Multivector p q f)
 
-dimension :: forall (n::Nat) f. SingI n => Multivector n f ->  Natural
-dimension _ = toNatural  ((fromIntegral $ fromSing (sing :: Sing n))::Word)
+dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Multivector p q f ->  (Natural,Natural)
+dimension _ = (toNatural  ((fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural  ((fromIntegral $ fromSing (sing :: Sing q))::Word))
 
-terms :: Lens' (Multivector n f) [Blade n f]
+terms :: Lens' (Multivector p q f) [Blade p q f]
 terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
 
 mvNormalForm (BladeSum terms) = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
@@ -102,7 +102,7 @@ mvTerms m = m^.terms
 
 addLikeTerms' = sumLikeTerms . groupLikeTerms
 
-groupLikeTerms ::Eq f =>  [Blade n f] -> [[Blade n f]]
+groupLikeTerms ::Eq f =>  [Blade p q f] -> [[Blade p q f]]
 groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
 
 compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
@@ -135,7 +135,7 @@ compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,z
 --      ei = multiplyAdd eim1 ai pii
 
 
-multiplyOutBlades :: (SingI n, Algebra.Ring.C a) => [Blade n a] -> [Blade n a] -> [Blade n a]
+multiplyOutBlades :: (SingI p, SingI q, Algebra.Ring.C a) => [Blade p q a] -> [Blade p q a] -> [Blade p q a]
 multiplyOutBlades x y = [bladeMul l r | l <-x, r <- y]
 
 --multiplyList :: Algebra.Ring.C t => [Multivector t] -> Multivector t
@@ -150,29 +150,29 @@ multiplyList l = mvNormalForm $ BladeSum listOfBlades where
 
 sumList xs = mvNormalForm $ BladeSum $ concat $ map mvTerms xs
 
-sumLikeTerms :: (Algebra.Field.C f, SingI n) => [[Blade n f]] -> [Blade n f]
+sumLikeTerms :: (Algebra.Field.C f, SingI p, SingI q) => [[Blade p q f]] -> [Blade p q f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
 
 
-instance (Algebra.Field.C f, SingI n, Ord f) => Data.Monoid.Monoid (Sum (Multivector n f)) where
+instance (Algebra.Field.C f, SingI p, SingI q, Ord f) => Data.Monoid.Monoid (Sum (Multivector p q f)) where
     mempty = Data.Monoid.Sum Algebra.Additive.zero
     mappend (Data.Monoid.Sum x) (Data.Monoid.Sum y)= Data.Monoid.Sum  (x + y)
     mconcat = Data.Monoid.Sum . sumList . map getSum
 
-instance (Algebra.Field.C f, SingI n, Ord f) => Data.Monoid.Monoid (Product (Multivector n f)) where
+instance (Algebra.Field.C f, SingI p, SingI q, Ord f) => Data.Monoid.Monoid (Product (Multivector p q f)) where
     mempty = Product one
     mappend (Product x) (Product y) = Product (x * y)
     mconcat = Product . foldl (*) one . map getProduct
 
 --Constructs a multivector from a scaled blade.
-e :: (Algebra.Field.C f, Ord f, SingI n) => f -> [Natural] -> Multivector n f
+e :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => f -> [Natural] -> Multivector p q f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 scalar s = s `e` []
 
 
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector n f)
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade n f)
-instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Additive.C (Multivector n f) where
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector p q f)
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade p q f)
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Additive.C (Multivector p q f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
     zero = BladeSum [scalarBlade Algebra.Additive.zero]
@@ -184,7 +184,7 @@ Now it is time for the Clifford product. :3
 
 \begin{code}
 
-instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Ring.C (Multivector n f) where
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multivector p q f) where
     BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
     a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
@@ -208,18 +208,18 @@ Clifford numbers have a magnitude and absolute value:
 --magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
 magnitude = sqrt . compensatedSum' . map (\b -> (bScale b)^ 2) . mvTerms
 
-instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f, SingI n) => Algebra.Absolute.C (Multivector n f) where
+instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Algebra.Absolute.C (Multivector p q f) where
     abs v =  magnitude v `e` []
     signum (BladeSum [Blade scale []]) = scalar $ signum scale 
     signum (BladeSum []) = scalar Algebra.Additive.zero
 
-instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.Module.C f (Multivector n f) where
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Module.C f (Multivector p q f) where
 --    (*>) zero v = Algebra.Additive.zero
     (*>) s v = v & mvTerms & map (bladeScaleLeft s) & BladeSum
 
 
 
-(/) :: (Algebra.Field.C f, Ord f, SingI n) => Multivector n f -> f -> Multivector n f
+(/) :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => Multivector p q f -> f -> Multivector p q f
 (/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
 
 (</) n d = Numeric.Clifford.Multivector.inverse d * n
@@ -306,7 +306,7 @@ reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 inverse a = assert (a /= zero) $ reverseMultivector a Numeric.Clifford.Multivector./ bScale (head $ mvTerms (a * reverseMultivector a))
 recip=Numeric.Clifford.Multivector.inverse
 
-instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.OccasionallyScalar.C f (Multivector n f) where
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.OccasionallyScalar.C f (Multivector p q f) where
     toScalar = bScale . bladeGetGrade 0 . head . mvTerms
     toMaybeScalar (BladeSum [Blade s []]) = Just s
     toMaybeScalar (BladeSum []) = Just Algebra.Additive.zero
@@ -317,7 +317,7 @@ instance (Algebra.Field.C f, Ord f, SingI n) => Algebra.OccasionallyScalar.C f (
 Also, we may as well implement the standard prelude Num interface.
 
 \begin{code}
-instance (Algebra.Algebraic.C f, SingI n,  Ord f) => PNum.Num (Multivector n f) where
+instance (Algebra.Algebraic.C f, SingI p, SingI q,  Ord f) => PNum.Num (Multivector p q f) where
     (+) = (Algebra.Additive.+)
     (-) = (Algebra.Additive.-)
     (*) = (Algebra.Ring.*)
@@ -332,23 +332,23 @@ instance (Algebra.Algebraic.C f, SingI n,  Ord f) => PNum.Num (Multivector n f) 
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root :: (Show f, Ord f, Algebra.Algebraic.C f, SingI d) => NPN.Integer -> Multivector d f -> Multivector d f
+root :: (Show f, Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => NPN.Integer -> Multivector p q f -> Multivector p q f
 root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
 root n a@(BladeSum _) = converge $ rootIterationsStart n a one
 
-rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector d f -> Multivector d f -> [Multivector d f]
+rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
                      g = if s >= NPN.zero then one else Algebra.Ring.one `e` [1,2] --BladeSum[Blade Algebra.Ring.one [1,2]]
 rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
 
 
-rootNewtonIterations :: (Algebra.Field.C f, Ord f, SingI d) => NPN.Integer -> Multivector d f -> Multivector d f -> [Multivector d f]
+rootNewtonIterations :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootNewtonIterations n a = iterate xkplus1 where
                      xkplus1 xk = xk + deltaxk xk
                      deltaxk xk = oneOverN * ((Numeric.Clifford.Multivector.inverse (xk ^ (n - one))* a)  - xk)
                      oneOverN = scalar $ NPN.recip $ fromInteger n
 
-rootHalleysIterations :: (Show a, Ord a, Algebra.Algebraic.C a, SingI d) => NPN.Integer -> Multivector d a -> Multivector d a -> [Multivector d a]
+rootHalleysIterations :: (Show a, Ord a, Algebra.Algebraic.C a, SingI p, SingI q) => NPN.Integer -> Multivector p q a -> Multivector p q a -> [Multivector p q a]
 rootHalleysIterations n a = halleysMethod f f' f'' where
     f x = a - (x^n)
     f' x = fromInteger (-n) * (x^(n-1))
@@ -361,7 +361,7 @@ pow a p = (a ^ up) Numeric.Clifford.Multivector./> Numeric.Clifford.Multivector.
     down = denominator ratio
 
 
-halleysMethod :: (Show a, Ord a, Algebra.Algebraic.C a, SingI d) => (Multivector d a -> Multivector d a) -> (Multivector d a -> Multivector d a) -> (Multivector d a -> Multivector d a) -> Multivector d a -> [Multivector d a]
+halleysMethod :: (Show a, Ord a, Algebra.Algebraic.C a, SingI p, SingI q) => (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> Multivector p q a -> [Multivector p q a]
 halleysMethod f f' f'' = iterate update where
     update x = x - (numerator x * Numeric.Clifford.Multivector.inverse (denominator x)) where
         numerator x = multiplyList [2, fx, dfx]
