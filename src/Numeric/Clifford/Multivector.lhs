@@ -74,6 +74,7 @@ import Data.Data
 import Data.DeriveTH
 import GHC.TypeLits
 import Data.Word
+import Control.Applicative
 import Debug.Trace
 --trace _ a = a
 
@@ -86,12 +87,19 @@ A multivector is nothing but a linear combination of basis blades.
 data Multivector (p::Nat) (q::Nat) f where
     BladeSum :: forall p q f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
 
+instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f, Ord f) => Arbitrary (Multivector p q f) where
+    arbitrary = mvNormalForm <$> BladeSum <$> (vector (3*d)) where
+       p' = (fromSing (sing :: Sing p)) :: Integer
+       q' = (fromSing (sing :: Sing q)) 
+       d = fromIntegral (p' + q')
+
 deriving instance Eq (Multivector p q f)
 deriving instance Ord (Multivector p q f)
 deriving instance (Show f) => Show (Multivector p q f)
+--deriving instance (Read f) => Read (Multivector p q f)
 
-dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Multivector p q f ->  (Natural,Natural)
-dimension _ = (toNatural  ((fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural  ((fromIntegral $ fromSing (sing :: Sing q))::Word))
+signature :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Multivector p q f ->  (Natural,Natural)
+signature _ = (toNatural  ((fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural  ((fromIntegral $ fromSing (sing :: Sing q))::Word))
 
 terms :: Lens' (Multivector p q f) [Blade p q f]
 terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
@@ -171,7 +179,7 @@ scalar s = s `e` []
 
 
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector p q f)
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade p q f)
+
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Additive.C (Multivector p q f) where
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
@@ -340,12 +348,19 @@ Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
 root :: (Show f, Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => NPN.Integer -> Multivector p q f -> Multivector p q f
+root 0 _ = error "Cannot take 0th root"
+root _ (BladeSum []) = error "Empty bladesum"
+root _ (BladeSum [Blade zero []]) = error "Cannot compute a root of zero"
 root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
-root n a@(BladeSum _) = converge $ rootIterationsStart n a one
+root n a@(BladeSum _) = converge $ rootIterationsStart n a g where
+    g = if q' <= 1 then  one`e`[q',succ q'] else one + one `e` [0,1]
+    (p',q') = signature a
 
 rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero then one else Algebra.Ring.one `e` [0,1] --BladeSum[Blade Algebra.Ring.one [1,2]]
+                     g = if s >= NPN.zero || q' == 1 then one else Algebra.Ring.one `e` [0,1] 
+                     (p',q') = signature a
+                     
 rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
 
 

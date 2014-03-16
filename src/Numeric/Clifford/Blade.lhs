@@ -39,6 +39,7 @@ import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith,
 import Algebra.Laws
 import Algebra.Absolute
 import Algebra.Additive
+import Control.DeepSeq
 import Algebra.Ring
 import Data.Serialize
 import Data.Word
@@ -66,7 +67,6 @@ The first problem: How to represent basis blades. One way to do it is via genera
 data Blade (p :: Nat) (q :: Nat) f where
     Blade :: forall p q f . (SingI p, SingI q, Algebra.Field.C f) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
 
--- makeLenses ''Blade
 scale :: Lens' (Blade p q f) f
 scale = lens _scale (\blade v -> blade {_scale = v})
 indices :: Lens' (Blade p q f) [Natural]
@@ -75,6 +75,7 @@ dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Blade p q f ->  (
 dimension _ = (toNatural  ((GHC.Real.fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural((GHC.Real.fromIntegral $ fromSing (sing :: Sing q))::Word))
 bScale b =  b^.scale
 bIndices b = b^.indices
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade p q f)
 instance(Show f) =>  Show (Blade p q f) where
     --TODO: Do this with HaTeX
     show  (Blade scale indices) = pref ++  if null indices then "" else basis where
@@ -210,6 +211,23 @@ instance Arbitrary Natural where
                 let n' = NPN.abs n in
                  fmap (toNatural . (\x -> (GHC.Real.fromIntegral x)::Word)) (choose (0, n'))
     shrink = shrinkIntegral
+
+instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f) => Arbitrary (Blade p q f) where
+    arbitrary = do
+      let p'' = (fromSing (sing :: Sing p)) :: Integer
+      let q'' = (fromSing (sing :: Sing q)) 
+      let d = p'' + q''
+      let maxLength = (2^d - 1) :: Integer
+      scale <- arbitrary
+      listSize <- choose (0, maxLength)
+      indices <- vectorOf (NPN.fromIntegral listSize) (resize (NPN.fromIntegral d-1) arbitrary )
+      return (Blade scale indices) 
+          where
+                
+                
+                
+                
+
 -- $(derive makeArbitrary ''Blade)
 \end{code}
 

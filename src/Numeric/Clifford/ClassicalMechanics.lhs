@@ -105,7 +105,7 @@ data RigidBody (p::Nat) (q::Nat) f where
 5. figure a way to take exterior product of 1 forms at a type level so i can just go like: omega = df1 ^ df2 ^ df ; omega a b c
 -}
 
-type Vector3 f = forall f.  Multivector 3 0 f
+type Vector3 f =  Multivector 3 0 f
 type STVector f = Multivector 3 1 f
 \end{code}
 \bibliographystyle{IEEEtran}
