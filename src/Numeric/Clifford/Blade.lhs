@@ -203,7 +203,10 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 \begin{code}
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade p q f) where
     compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
-                | otherwise =  compare (bIndices a) (bIndices b)
+                | otherwise = case compare ((length . bIndices) a) ((length . bIndices) b) of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare (bIndices a) (bIndices b)
 
 
 instance Arbitrary Natural where

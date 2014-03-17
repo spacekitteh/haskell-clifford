@@ -10,7 +10,7 @@ name:                clifford
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.4
+version:             0.1.0.5
 
 -- A short (one-line) description of the package.
 synopsis:            A Clifford algebra library
@@ -43,8 +43,7 @@ build-type:          Simple
 
 -- Extra files to be distributed with the package, such as examples or a 
 -- README.
-extra-source-files:  README.md changelog.md
-
+extra-source-files:  README.md changelog.md test/Numeric/Clifford/BladeSpec.lhs test/Numeric/Clifford/MultivectorSpec.lhs
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.10
 

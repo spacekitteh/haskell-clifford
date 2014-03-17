@@ -29,7 +29,7 @@ spec = do
          it "cannot compute a root of 0" $ do
             evaluate (root 1 (zero::STVector)) `shouldThrow` anyErrorCall
          it "computes the nth root of a value" $ do
-           (compareTol ((root 3 fuckOffSized)^3) fuckOffSized 0.0000001) `shouldBe` True
+           comp ((root 3 fuckOffSized)^3) fuckOffSized `shouldBe` True
              
          {-it "computes the nth root of a vector. May fail to terminate." $ verbose prop where
             prop x k= (magnitude (abs ((rooted ^ n) - x))) <= 0.000001 || x == zero || n == zero  where

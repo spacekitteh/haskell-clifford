@@ -21,7 +21,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, KindSignatures, DataKinds #-}
-{-# LANGUAGE TemplateHaskell, TypeOperators #-}
+{-# LANGUAGE TemplateHaskell, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 \end{code}
 %if False
@@ -73,6 +73,7 @@ import Data.Monoid
 import Data.Data
 import Data.DeriveTH
 import GHC.TypeLits
+import Control.Lens.Lens
 import Data.Word
 import Control.Applicative
 import Debug.Trace
@@ -94,6 +95,8 @@ instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f, Ord f) => Arbitrary 
        d = fromIntegral (p' + q')
 
 deriving instance Eq (Multivector p q f)
+--instance  (SingI p, SingI q) => Functor (Multivector p q) where
+--    fmap func x =  func x--((terms x) & scale %~ func)
 deriving instance Ord (Multivector p q f)
 deriving instance (Show f) => Show (Multivector p q f)
 --deriving instance (Read f) => Read (Multivector p q f)
@@ -313,10 +316,11 @@ cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
 expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Numeric.Clifford.Multivector./ fromInteger n )) (1::NPN.Integer,one)
 
-dot a b = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
-wedge a b = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
-(∧) = wedge
-(⋅) = dot
+dot a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
+wedge a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
+
+(∧) = wedge :: Multivector p q f -> Multivector p q f -> Multivector p q f
+(⋅) = dot :: Multivector p q f -> Multivector p q f -> Multivector p q f
 
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
