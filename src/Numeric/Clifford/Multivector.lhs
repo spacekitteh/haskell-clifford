@@ -430,7 +430,6 @@ Now let's do (slow as fuck probably) numerical integration! :D~! Since this is g
 
 
 
-
 {- $(derive makeSerialize ''Blade)
 $(derive makeSerialize ''Multivector)
 $(derive makeData ''Blade)
