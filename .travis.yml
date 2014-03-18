@@ -44,6 +44,7 @@ before_install:
    esac
 
  - sudo add-apt-repository -y ppa:hvr/ghc
+ - wget -q -O - http://llvm.org/apt/llvm-snapshot.gpg.key | sudo apt-key add -qq -
  - sudo add-apt-repository 'deb http://llvm.org/apt/precise/ llvm-toolchain-precise-3.4 main'
  - sudo add-apt-repository 'deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu precise main'
  - sudo apt-get update
