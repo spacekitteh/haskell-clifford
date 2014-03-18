@@ -10,11 +10,12 @@
 
 
 env:
+  - GHCVER=7.6.3
   fast_finish: true
   allow_failures:
     - GHCVER=head
     - GHCVER=7.8.1
-  - GHCVER=7.6.3
+
 
 
 # Note: the distinction between `before_install` and `install` is not
