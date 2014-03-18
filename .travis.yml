@@ -8,7 +8,6 @@
 # GHCVER. Omit lines with versions you don't need/want testing for.
 env:
 
- - GHCVER=7.6.3
  - GHCVER=7.8.1
  - GHCVER=head
  - HPVER=2013.2.0.0
@@ -53,6 +52,7 @@ before_install:
  - export LD_LIBRARY_PATH=/usr/lib/llvm-3.4/lib/:$LD_LIBRARY_PATH
 
 install:
+ - which opt
  - cabal-1.18 update
  - cabal-1.18 install happy alex
  - cabal-1.18 install --only-dependencies --enable-tests --enable-benchmarks
