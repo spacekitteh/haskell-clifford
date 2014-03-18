@@ -8,8 +8,8 @@
 # GHCVER. Omit lines with versions you don't need/want testing for.
 env:
   matrix:
-    - HPVER=2013.2.0.0
     fast_finish: true
+    - HPVER=2013.2.0.0
     allow_failures:
       - GHCVER=7.8.1
       - GHCVER=head
