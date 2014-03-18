@@ -57,7 +57,11 @@ install:
 script:
  # -v2 provides useful information for debugging
  - cabal-1.18 configure --enable-tests --enable-benchmarks -v2
-
+- |
+   if [ $GHCVER = "head" ] || [ $GHCVER = "7.8.1" ] || [ $GHCVER = "7.6.3" ] || [ $GHCVER = "7.6.2" ] ; then
+     $CABAL install happy alex
+     export PATH=$HOME/.cabal/bin:$PATH
+   fi
  # this builds all libraries and executables
  # (including tests/benchmarks)
  - cabal-1.18 build
