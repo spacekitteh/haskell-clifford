@@ -6,17 +6,12 @@
 # to be tested; often it's enough to test only against the last
 # release of a major GHC version. Setting HPVER implictly sets
 # GHCVER. Omit lines with versions you don't need/want testing for.
-#env:
-#  matrix:
-#    allow_failures:
-#      - GHCVER=7.8.1
-#      - GHCVER=head
-#      - HPVER=2012.4.0.0    
-#    fast_finish: true
-#      - HPVER=2013.2.0.0    
-    
+
+
+
 env:
   - GHCVER=7.6.3
+
 
 # Note: the distinction between `before_install` and `install` is not
 #       important.
