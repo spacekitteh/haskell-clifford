@@ -11,10 +11,6 @@
 
 env:
   - GHCVER=7.6.3
-  fast_finish: true
-  allow_failures:
-    - GHCVER=head
-    - GHCVER=7.8.1
 
 
 
