@@ -7,11 +7,14 @@
 # release of a major GHC version. Setting HPVER implictly sets
 # GHCVER. Omit lines with versions you don't need/want testing for.
 env:
-
- - GHCVER=7.8.1
- - GHCVER=head
- - HPVER=2013.2.0.0
- - HPVER=2012.4.0.0
+  matrix:
+    fast_finish: true
+    allow_failures:
+      - GHCVER=7.8.1
+      - GHCVER=head
+      - HPVER=2012.4.0.0
+    - HPVER=2013.2.0.0
+    
 
 # Note: the distinction between `before_install` and `install` is not
 #       important.
@@ -47,7 +50,7 @@ before_install:
  - sudo add-apt-repository 'deb http://llvm.org/apt/precise/ llvm-toolchain-precise-3.4 main'
  - sudo add-apt-repository 'deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu precise main'
  - sudo apt-get update
- - sudo apt-get install cabal-install-1.18 ghc-$GHCVER llvm llvm-3.4 llvm-3.4-dev libclang-common-3.4-dev libclang-3.4-dev
+ - sudo apt-get install cabal-install-1.18 ghc-$GHCVER llvm-toolchain-3.4 llvm-tools-3.4 llvm-3.4 llvm-3.4-dev libclang-common-3.4-dev libclang-3.4-dev
  - export PATH=/opt/ghc/$GHCVER/bin:$PATH
  - export LD_LIBRARY_PATH=/usr/lib/llvm-3.4/lib/:$LD_LIBRARY_PATH
 
