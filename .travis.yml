@@ -50,11 +50,7 @@ before_install:
 
 install:
  - cabal-1.18 update
- - |
-   if [ $GHCVER = "head" ] || [ $GHCVER = "7.8.1" ] || [ $GHCVER = "7.6.3" ] || [ $GHCVER = "7.6.2" ] ; then
-     $CABAL install happy alex
-     export PATH=$HOME/.cabal/bin:$PATH
-   fi
+ - cabal-1.18 install happy alex
  - cabal-1.18 install --only-dependencies --enable-tests --enable-benchmarks
 
 # Here starts the actual work to be performed for the package under
