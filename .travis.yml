@@ -11,6 +11,7 @@
 
 env:
   - GHCVER=7.6.3
+  - GHCVER=head
 
 
 # Note: the distinction between `before_install` and `install` is not
