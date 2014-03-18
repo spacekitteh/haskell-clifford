@@ -16,7 +16,6 @@
 #      - HPVER=2013.2.0.0    
     
 env:
-  fast_finish = true
   allow_failures:
     - GHCVER=7.8.1
     - GHCVER=head
