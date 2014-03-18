@@ -50,6 +50,7 @@ before_install:
  - sudo apt-get update
  - sudo apt-get install cabal-install-1.18 ghc-$GHCVER llvm-3.4 llvm-3.4-dev libclang-common-3.4-dev libclang-3.4-dev
  - export PATH=/opt/ghc/$GHCVER/bin:$PATH
+ - export LD_LIBRARY_PATH=/usr/lib/llvm-3.4/lib/:$LD_LIBRARY_PATH
 
 install:
  - cabal-1.18 update
@@ -84,3 +85,6 @@ script:
    fi
 
 # EOF
+
+notifications:
+  email: false
