@@ -169,7 +169,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         (time + (stepSizeAdapter time state)*h*(c s), newState) where
         zi :: Int -> [Multivector p q t]
         zi i = (\out -> myTrace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
-               assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
+                converger $ iterate (zkp1 i) initialGuess where
             initialGuess :: [Multivector p q t]
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             adaptiveStepSizeFraction :: t

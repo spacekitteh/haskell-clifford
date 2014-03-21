@@ -3,6 +3,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE DataKinds #-}
+{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -optlc-O=3 -O3 #-}
 
 import           Numeric.Clifford.Multivector
 import Numeric.Clifford.NumericIntegration.DefaultIntegrators
