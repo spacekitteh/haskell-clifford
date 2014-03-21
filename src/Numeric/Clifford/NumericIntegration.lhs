@@ -54,9 +54,8 @@ import Control.Lens hiding (indices)
 import Control.Exception (assert)
 import Data.Maybe
 import GHC.TypeLits
+import Numeric.Clifford.Internal
 import Data.DeriveTH
-import Debug.Trace
---trace _ a = a
 
 
 elementAdd = zipWith (+)
@@ -95,7 +94,7 @@ convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
 
-showOutput name x = trace ("output of " ++ name ++" is " ++ show x) x
+showOutput name x = myTrace ("output of " ++ name ++" is " ++ show x) x
 
 convergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
                    => f ->  [[Multivector p q f]] -> [Multivector p q f]
@@ -104,7 +103,7 @@ convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
     where
       empty = error "converge: error in impl"
       check (a:b:c:_)
-          | (trace ("Converging at " ++ show a) a) == b = Just b
+          | (myTrace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
           | ((showOutput ("convergence check with tolerance " ++ show t) $ 
               magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t) = showOutput ("convergence with tolerance "++ show t )$ Just c
@@ -157,8 +156,8 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     converger :: [[Multivector p q t]] -> [Multivector p q t]
     converger = case  find (\x -> isConvergenceTolerance x || isConvergenceFunction x) attributes of
                   Just (ConvergenceFunction conv) -> conv
-                  Just (ConvergenceTolerance tol) -> convergeTolLists (trace ("Convergence tolerance set to " ++ show tol)tol)
-                  Nothing -> trace "No convergence tolerance specified, defaulting to equality" convergeList 
+                  Just (ConvergenceTolerance tol) -> convergeTolLists (myTrace ("Convergence tolerance set to " ++ show tol)tol)
+                  Nothing -> myTrace "No convergence tolerance specified, defaulting to equality" convergeList 
 
     stepSizeAdapter :: AdaptiveStepSizeFunction t stateType
     stepSizeAdapter = case find isAdaptiveStepSize attributes of
@@ -169,7 +168,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     rkMethodImplicitFixedPoint h f project unproject (time, state) =
         (time + (stepSizeAdapter time state)*h*(c s), newState) where
         zi :: Int -> [Multivector p q t]
-        zi i = (\out -> trace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
+        zi i = (\out -> myTrace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
                assert (i <= s && i>= 1) $ converger $ iterate (zkp1 i) initialGuess where
             initialGuess :: [Multivector p q t]
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)

@@ -76,8 +76,8 @@ import GHC.TypeLits
 import Control.Lens.Lens
 import Data.Word
 import Control.Applicative
-import Debug.Trace
---trace _ a = a
+import Numeric.Clifford.Internal
+
 
 \end{code}
 
@@ -255,7 +255,7 @@ converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs)
     where
       empty = error "converge: error in implmentation"
       checkPeriodic (a:b:c:_)
-          | (trace ("Converging at " ++ show a) a) == b = Just a
+          | (myTrace ("Converging at " ++ show a) a) == b = Just a
           | a == c = Just a
       checkPeriodic _ = Nothing
 
@@ -277,21 +277,21 @@ shanksTransformation a@(xnm1:xn:[]) = a
 shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
                                        | xnm1 == xnp1 = [xnm1]
                                        | denominator == zero = [xnp1]
-                                       | otherwise = trace ("Shanks transformation input = " ++ show xn ++ "\nShanks transformation output = " ++ show out) out:shanksTransformation (xn:xnp1:xs) where
+                                       | otherwise = myTrace ("Shanks transformation input = " ++ show xn ++ "\nShanks transformation output = " ++ show out) out:shanksTransformation (xn:xnp1:xs) where
                                        out = numerator />  denominator 
                                        numerator = sumList [xnp1*xnm1, negate (xn^2)]
                                        denominator = sumList [xnp1, (-2)*xn, xnm1] 
 
 
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
-exp (BladeSum [ Blade s []]) = trace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
-exp x = trace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
+exp (BladeSum [ Blade s []]) = myTrace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
+exp x = myTrace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
     --todo: compute a ^ p via a^n where n = floor p then multiply remaining power
     expMag = Algebra.Transcendental.exp mag
     expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
     convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
-    mag = trace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
-    scaled = let val = (Numeric.Clifford.Multivector./) x mag in trace ("In exponential, scaled is" ++ show val) val
+    mag = myTrace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
+    scaled = let val = (Numeric.Clifford.Multivector./) x mag in myTrace ("In exponential, scaled is" ++ show val) val
 
 
 

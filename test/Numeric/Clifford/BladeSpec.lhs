@@ -18,6 +18,7 @@ spec = do
   let d =  Blade 4.0 [2] :: Blade 3 1 Double
   let e = Blade 2.0 [0] :: Blade 3 1 Double
   let f = Blade 3.0 [0] :: Blade 3 1 Double
+  --todo: Memoise the blade index sorting function.
   describe "bladeMul" $ do
          it "multiplies an n-blade with an m-blade to give an n+m blade if each index is unique" $ do
                           (a `bladeMul` b) `shouldBe` ab

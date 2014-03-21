@@ -22,7 +22,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs #-}
 {-# LANGUAGE FlexibleInstances,  UnicodeSyntax, GADTs, KindSignatures, DataKinds #-}
 {-# LANGUAGE TemplateHaskell, StandaloneDeriving, TypeOperators #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
 \end{code}
 %if False
 \begin{code}
@@ -53,9 +53,8 @@ import Data.DeriveTH
 import GHC.TypeLits hiding (isEven, isOdd)
 import GHC.Real (fromIntegral, toInteger)
 import Algebra.Field
-import Debug.Trace
---trace _ a = a
-
+import Data.MemoTrie
+import Numeric.Clifford.Internal
 \end{code}
 
 
@@ -118,26 +117,35 @@ However, the plain data constructor should never be used, for it doesn't order t
 
 
 \begin{code}
+
 bladeNormalForm :: forall (p::Nat) (q::Nat) f.  Blade p q f -> Blade p q f
 bladeNormalForm (Blade scale indices)  = result 
         where
-             result = if (any (\i -> (GHC.Real.toInteger i) >= d) indices) then trace "Blade contains vector with i >= d" zeroBlade else Blade scale' uniqueSorted
+             result = if (any (\i -> (GHC.Real.toInteger i) >= d) indices) then zeroBlade else Blade scale' newIndices
              p' = (fromSing (sing :: Sing p)) :: Integer
              q' = (fromSing (sing :: Sing q)) :: Integer
              d = p' + q'
-             numOfIndices = length indices
-             (sorted, perm) = Data.Permute.sort numOfIndices indices
-             scale' = if (isEven perm) /= (negated)  then scale else negate scale
-             (uniqueSorted,negated) = removeDupPairs [] sorted False
-                            where
-                              removeDupPairs :: [Natural] -> [Natural] -> Bool -> ([Natural],Bool)
-                              removeDupPairs accum [] negated = (accum,negated)
-                              removeDupPairs accum [x] negated = (accum++[x],negated)
-                              removeDupPairs accum (x:y:rest) negated  | x == y  = 
-                                                                            if  GHC.Real.toInteger x <  q' 
-                                                                            then removeDupPairs accum rest (not negated)
-                                                                            else removeDupPairs accum rest negated
-                                                        | otherwise = removeDupPairs (accum++[x]) (y:rest) negated
+             
+             
+             scale' = if doNotNegate  then scale else negate scale
+             (newIndices, doNotNegate) = sortIndices (indices,q')
+
+sortIndices = memo sortIndices' where
+sortIndices' :: ([Natural],Integer) -> ([Natural],Bool) 
+sortIndices' (indices,q') = (uniqueSorted, doNotNegate) where
+                      (sorted, perm) = Data.Permute.sort numOfIndices indices
+                      numOfIndices = length indices
+                      doNotNegate = (isEven perm) /= (negated)
+                      (uniqueSorted,negated) = removeDupPairs [] sorted False
+                          where
+                            removeDupPairs :: [Natural] -> [Natural] -> Bool -> ([Natural],Bool)
+                            removeDupPairs accum [] negated = (accum,negated)
+                            removeDupPairs accum [x] negated = (accum++[x],negated)
+                            removeDupPairs accum (x:y:rest) negated  | x == y  = 
+                                                                         if  GHC.Real.toInteger x <  q' 
+                                                                         then removeDupPairs accum rest (not negated)
+                                                                         else removeDupPairs accum rest negated
+                                                                     | otherwise = removeDupPairs (accum++[x]) (y:rest) negated
 \end{code}
 
 What is the grade of a blade? Just the number of indices.
@@ -160,7 +168,7 @@ First up for operations: Blade multiplication. This is no more than assembling o
 
 \begin{code}
 bladeMul ::  Blade p q f -> Blade p q f-> Blade p q f
-bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y) -- HAVE TO MAKE Q INDICES SQUARE NEGATIVE
+bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y) 
 multiplyBladeList :: (SingI p, SingI q, Algebra.Field.C f) => [Blade p q f] -> Blade p q f
 multiplyBladeList [] = error "Empty blade list!"
 multiplyBladeList (a:[]) = a
@@ -203,11 +211,12 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 \begin{code}
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade p q f) where
     compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
-                | otherwise = case compare ((length . bIndices) a) ((length . bIndices) b) of
+                | otherwise = compareIndices (bIndices a) (bIndices b)
+compareIndices = memo compareIndices' where
+    compareIndices' a b =  case compare (length a) (length b) of
                                 LT -> LT
                                 GT -> GT
-                                EQ -> compare (bIndices a) (bIndices b)
-
+                                EQ -> compare a b
 
 instance Arbitrary Natural where
     arbitrary = sized $ \n ->
