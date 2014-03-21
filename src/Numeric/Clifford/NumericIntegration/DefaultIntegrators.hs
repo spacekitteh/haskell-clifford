@@ -62,13 +62,13 @@ lobattoIIIBFourthOrder h f (t, state) = impl h f id id (t, state) where
 
 rk4Classical :: (Ord a, Algebra.Algebraic.C a, SingI p, SingI q) =>  stateType -> a -> (stateType->stateType) -> ([Multivector p q a] -> stateType) -> (stateType -> [Multivector p q a]) -> stateType
 rk4Classical state h f project unproject = project newState where
-    update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] MV./ Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
+    update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] `divideRight`  Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
     newState = zipWith (+) state' update
     state' = unproject state
     evalDerivatives x = unproject $ f $ project x
     k1 = map (h*>) $ evalDerivatives state'
-    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (MV./ two) k1)
-    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (MV./ two) k2)
+    k2 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (`divideRight` two) k1)
+    k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (`divideRight` two) k2)
     k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' k3
 
 rk4ClassicalList state h f = rk4Classical state h f id id

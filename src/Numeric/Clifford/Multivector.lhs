@@ -63,7 +63,7 @@ import qualified NumericPrelude.Numeric as NPN
 import Test.QuickCheck
 import Math.Sequence.Converge (convergeBy)
 import Control.DeepSeq 
-import Number.Ratio hiding (scale)
+import Number.Ratio hiding (scale, recip)
 import Algebra.ToRational
 import qualified GHC.Num as PNum
 import Control.Lens hiding (indices)
@@ -75,7 +75,7 @@ import Data.DeriveTH
 import GHC.TypeLits
 import Control.Lens.Lens
 import Data.Word
-import Control.Applicative
+import Control.Applicative ((<$>))
 import Numeric.Clifford.Internal
 
 
@@ -240,14 +240,20 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Module.C f (Mul
 
 
 
-(/) :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => Multivector p q f -> f -> Multivector p q f
-(/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
+--(/) :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => Multivector p q f -> f -> Multivector p q f
+--(/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
 
 (</) n d = Numeric.Clifford.Multivector.inverse d * n
 (/>) n d = n * Numeric.Clifford.Multivector.inverse d
 (</>) n d = n /> d
 
-integratePoly c x = c : zipWith (Numeric.Clifford.Multivector./) x progression
+{-#INLINE scaleLeft #-}
+scaleLeft s v = BladeSum $ map (bladeScaleLeft s) $ mvTerms v
+{-#INLINE scaleRight #-}
+scaleRight v s = BladeSum $ map (bladeScaleRight s) $ mvTerms v
+{-#INLINE divideRight #-}
+divideRight v s = scaleRight v (recip s)
+--integratePoly c x = c : zipWith (Numeric.Clifford.Multivector./) x progression
 
 --converge :: (Eq f, Show f) => [f] -> f
 converge [] = error "converge: empty list"
@@ -291,7 +297,7 @@ exp x = myTrace ("Computing exponential of " ++ show x) convergeTerms x where --
     expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
     convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
     mag = myTrace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
-    scaled = let val = (Numeric.Clifford.Multivector./) x mag in myTrace ("In exponential, scaled is" ++ show val) val
+    scaled = let val =  (recip mag) *> x in myTrace ("In exponential, scaled is" ++ show val) val
 
 
 
@@ -314,7 +320,8 @@ sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
 cos x = converge $ shanksTransformation $ compensatedRunningSum (Algebra.Ring.one : cosTerms x)
 cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
 
-expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (x*b) Numeric.Clifford.Multivector./ fromInteger n )) (1::NPN.Integer,one)
+expTerms :: (Algebra.Algebraic.C f, SingI p, SingI q, Ord f) => Multivector p q f -> [Multivector p q f]
+expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (recip $ fromInteger n ) `scaleLeft` (x*b) )) (1::NPN.Integer,one)
 
 dot a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
@@ -325,8 +332,13 @@ wedge a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bWedge` y | x
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
-inverse a = assert (a /= zero) $ reverseMultivector a Numeric.Clifford.Multivector./ bScale (head $ mvTerms (a * reverseMultivector a))
-recip=Numeric.Clifford.Multivector.inverse
+
+inverse a@(BladeSum _)  = assert (a /= zero) $ (recip scalarComponent) *> (reverseMultivector a)  where
+    scalarComponent = bScale (head $ mvTerms (a * reverseMultivector a))
+
+
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Field.C (Multivector p q f) where
+    recip = inverse
 
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.OccasionallyScalar.C f (Multivector p q f) where
     toScalar = bScale . bladeGetGrade 0 . head . mvTerms
@@ -412,8 +424,10 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 
 \begin{code}
 
-normalised a = a * (scalar $ NPN.recip $ magnitude a)
+normalised :: (Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => Multivector p q f -> Multivector p q f
+normalised a = a `scaleRight` ( NPN.recip $ magnitude a)
 
+log :: (Algebra.Transcendental.C f, Ord f, SingI p, SingI q, Show f) => Multivector p q f -> Multivector p q f
 log (BladeSum [Blade s []]) = scalar $ NPN.log s
 log a = scalar (NPN.log mag) + log' scaled where
     scaled = normalised a

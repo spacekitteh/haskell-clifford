@@ -23,13 +23,13 @@ enormousThing = a*a*a*a*a*a*a + scalar2
 expDecay _ x =  map negate $ map ((*) (1.3 `e` [] :: STVector))  x
 thelambda init = lobattoIIIAFourthOrder 0.01 expDecay init
 main = defaultMain [
-	bgroup "log" [ bench "scalar 2.0" $ nf log scalar2
-			, bench "2ij" $ nf log ij2
-			, bench "3ik" $ nf log ik3
-			, bench "4ijk" $ nf log ijk4
-			, bench "5ijl" $ nf log ijl5
-			, bench "sum" $ nf log a
-			, bench "enormous thing" $ nf log enormousThing
+	bgroup "log" [ bench "scalar 2.0" $ nf (log) scalar2
+			, bench "2ij" $ nf (log) ij2
+			, bench "3ik" $ nf (log) ik3
+			, bench "4ijk" $ nf (log) ijk4
+			, bench "5ijl" $ nf (log) ijl5
+			, bench "sum" $ nf (log) a
+			, bench "enormous thing" $ nf (log) enormousThing
 		     ],
         bgroup "lobatto IIIA 4th order RK solver"
 		    [
