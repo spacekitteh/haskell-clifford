@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
-{-# LANGUAGE TypeOperators, TypeFamilies, CPP #-}
+{-# LANGUAGE TypeOperators, TypeFamilies,CPP #-}
 module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate) where
 import Numeric.Natural
+import Prelude hiding (head,tail, null)
 import Data.MemoTrie
 import Data.List.Stream
 import Control.Arrow
@@ -14,19 +15,20 @@ myTrace _ x = x
 #endif
 instance HasTrie Natural where
     newtype Natural :->: a = NaturalTrie ((Bool,[Bool]) :->: a)
-    trie f = NaturalTrie (trie (f . unbitsZ))
+    trie f = NaturalTrie (trie (f . unbitsZ)) 
     untrie (NaturalTrie t) = untrie t . bitsZ
     enumerate (NaturalTrie t) = enum' unbitsZ t
 
 
 unbitsZ :: (Prelude.Num n, Bits n) => (Bool,[Bool]) -> n
-unbitsZ (positive,bs) = sig (unbits bs)
- where
-   sig | positive  = id
-       | otherwise = Prelude.negate
+unbitsZ (headder,bs) =  (unbits  (headder:bs))
 
 bitsZ :: (Prelude.Num n, Ord n, Bits n) => n -> (Bool,[Bool])
-bitsZ = (>= 0) &&& (bits . Prelude.abs)
+bitsZ i = (h, t ) where 
+     theBits = bits i
+     (h,t) = if null theBits
+                then (False,[])
+                else (head theBits, tail theBits)
 bits :: (Prelude.Num t, Bits t) => t -> [Bool]
 bits 0 = []
 bits x = testBit x 0 : bits (shiftR x 1)
