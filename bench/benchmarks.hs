@@ -8,6 +8,8 @@
 import           Numeric.Clifford.Multivector
 import Numeric.Clifford.NumericIntegration.DefaultIntegrators
 import           Criterion.Main
+import Algebra.Transcendental
+import Algebra.Algebraic
 import           Data.List.Stream
 import           NumericPrelude   hiding (iterate, last, map, take, log)
 import           Prelude          hiding (iterate, last, map, negate, take,log, (*),

@@ -22,7 +22,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, KindSignatures, DataKinds #-}
 {-# LANGUAGE TemplateHaskell, TypeOperators, DeriveFunctor #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
 \end{code}
 %if False
 \begin{code}
@@ -158,7 +158,9 @@ multiplyList [] = error "Empty list"
 multiplyList l = mvNormalForm $ BladeSum listOfBlades where
     expandedBlades a = foldl1 multiplyOutBlades a
     listOfBlades = expandedBlades $ map mvTerms l
-
+multiplyList1 l = mvNormalForm $ BladeSum listOfBlades where
+    expandedBlades a = foldl1 multiplyOutBlades a
+    listOfBlades = expandedBlades $ map mvTerms l
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
 --                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
 
@@ -290,14 +292,7 @@ shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
 
 
 --exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
-exp (BladeSum [ Blade s []]) = myTrace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
-exp x = myTrace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
-    --todo: compute a ^ p via a^n where n = floor p then multiply remaining power
-    expMag = Algebra.Transcendental.exp mag
-    expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
-    convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
-    mag = myTrace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
-    scaled = let val =  (recip mag) *> x in myTrace ("In exponential, scaled is" ++ show val) val
+
 
 
 
@@ -307,21 +302,54 @@ takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
                      [] -> []
 
-cosh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ expTerms x
 
-sinh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 seriesPlusMinus (x:y:rest) = x:Algebra.Additive.negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus rest
 
 
-sin x = converge $ shanksTransformation $ compensatedRunningSum $ sinTerms x
-sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
-cos x = converge $ shanksTransformation $ compensatedRunningSum (Algebra.Ring.one : cosTerms x)
-cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
+
+
+
 
 expTerms :: (Algebra.Algebraic.C f, SingI p, SingI q, Ord f) => Multivector p q f -> [Multivector p q f]
 expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (recip $ fromInteger n ) `scaleLeft` (x*b) )) (1::NPN.Integer,one)
+
+instance (Algebra.Transcendental.C f, Ord f, SingI p, SingI q, Show f) => Algebra.Transcendental.C (Multivector p q f) where
+    pi = scalar pi
+    exp (BladeSum [ Blade s []]) = myTrace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
+    exp x = myTrace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
+        expMag = Algebra.Transcendental.exp mag
+        expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
+        convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
+        mag = myTrace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
+        scaled = let val =  (recip mag) *> x in myTrace ("In exponential, scaled is" ++ show val) val
+
+    log (BladeSum [Blade s []]) = scalar $ NPN.log s
+    log a = scalar (NPN.log mag) + log' scaled where
+        scaled = normalised a
+        mag = magnitude a
+        log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
+         f x = a - exp x
+         f' x = NPN.negate $ exp x
+         f'' = f'
+
+    sin x = converge $ shanksTransformation $ compensatedRunningSum $ sinTerms x where
+      sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
+    cos x = converge $ shanksTransformation $ compensatedRunningSum (one : cosTerms x) where
+      cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
+
+    atan z = (z/onePlusZSquared) * (one + (converge $ shanksTransformation $ compensatedRunningSum $ map lambda [1..])) where
+      lambda :: Integer -> Multivector p q f
+      lambda n = multiplyList1 $ map innerFraction [1..n]
+      innerFraction :: Integer -> Multivector p q f
+      innerFraction k = (tk*zSquared)/>((tk+one)*(onePlusZSquared)) where
+        tk = fromInteger (2*k)        
+      zSquared = z^2 :: Multivector p q f
+      onePlusZSquared = one+z^2 :: Multivector p q f
+
+    cosh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ expTerms x
+    sinh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
 dot a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
 wedge a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
@@ -366,14 +394,14 @@ instance (Algebra.Algebraic.C f, SingI p, SingI q,  Ord f) => PNum.Num (Multivec
 Let's use Newton or Halley iteration to find the principal n-th root :3
 
 \begin{code}
-root :: (Show f, Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => NPN.Integer -> Multivector p q f -> Multivector p q f
-root 0 _ = error "Cannot take 0th root"
-root _ (BladeSum []) = error "Empty bladesum"
-root _ (BladeSum [Blade zero []]) = error "Cannot compute a root of zero"
-root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
-root n a@(BladeSum _) = converge $ rootIterationsStart n a g where
-    g = if q' <= 1 then  one`e`[q',succ q'] else one + one `e` [0,1]
-    (p',q') = signature a
+instance (Algebra.Algebraic.C f, Show f, Ord f, SingI p, SingI q) =>  Algebra.Algebraic.C (Multivector p q f) where
+    root 0 _ = error "Cannot take 0th root"
+    root _ (BladeSum []) = error "Empty bladesum"
+    root _ (BladeSum [Blade zero []]) = error "Cannot compute a root of zero"
+    root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
+    root n a@(BladeSum _) = converge $ rootIterationsStart n a g where
+      g = if q' <= 1 then  one`e`[q',succ q'] else one + one `e` [0,1]
+      (p',q') = signature a
 
 rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
@@ -396,11 +424,10 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
     f'' x = fromInteger (-(n*(n-1))) * (x^(n-2))
 
 
-pow a p = (a ^ up) Numeric.Clifford.Multivector./> Numeric.Clifford.Multivector.root down a where
+{-pow a p = (a ^ up) Numeric.Clifford.Multivector./> Numeric.Clifford.Multivector.root down a where
     ratio = toRational p
     up = numerator ratio
-    down = denominator ratio
-
+    down = denominator ratio-}
 
 halleysMethod :: (Show a, Ord a, Algebra.Algebraic.C a, SingI p, SingI q) => (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> Multivector p q a -> [Multivector p q a]
 halleysMethod f f' f'' = iterate update where
@@ -427,15 +454,7 @@ Now let's try logarithms by fixed point iteration. It's gonna be slow, but whate
 normalised :: (Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => Multivector p q f -> Multivector p q f
 normalised a = a `scaleRight` ( NPN.recip $ magnitude a)
 
-log :: (Algebra.Transcendental.C f, Ord f, SingI p, SingI q, Show f) => Multivector p q f -> Multivector p q f
-log (BladeSum [Blade s []]) = scalar $ NPN.log s
-log a = scalar (NPN.log mag) + log' scaled where
-    scaled = normalised a
-    mag = magnitude a
-    log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
-         f x = a - Numeric.Clifford.Multivector.exp x
-         f' x = NPN.negate $ Numeric.Clifford.Multivector.exp x
-         f'' = f'
+
 \end{code}
 
 Now let's do (slow as fuck probably) numerical integration! :D~! Since this is gonna be used for physical applications, it's we're gonna start off with a Hamiltonian structure and then a symplectic integrator.

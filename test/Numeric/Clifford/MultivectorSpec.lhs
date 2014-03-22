@@ -6,6 +6,7 @@ import Test.Hspec
 import Test.QuickCheck
 import Numeric.Clifford.Multivector
 import Algebra.Ring
+import Algebra.Algebraic
 --import Numeric.Natural
 import Algebra.Additive (zero)
 import Control.Exception (evaluate)
