@@ -88,6 +88,9 @@ A multivector is nothing but a linear combination of basis blades.
 data Multivector (p::Nat) (q::Nat) f where
     BladeSum :: forall p q f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
 
+type STVector = Multivector 3 1 Double
+type E3Vector = Multivector 3 0 Double
+
 instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f, Ord f) => Arbitrary (Multivector p q f) where
     arbitrary = mvNormalForm <$> BladeSum <$> (vector d) where
        p' = (fromSing (sing :: Sing p)) :: Integer
@@ -107,18 +110,23 @@ signature _ = (toNatural  ((fromIntegral $ fromSing (sing :: Sing p))::Word),toN
 terms :: Lens' (Multivector p q f) [Blade p q f]
 terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
 
+{-# INLINE mvNormalForm #-}
 mvNormalForm (BladeSum terms) = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
     resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $  map bladeNormalForm $ terms
+{-#INLINE mvTerms #-}
 mvTerms m = m^.terms
 
+{-# INLINE addLikeTerms' #-}
 addLikeTerms' = sumLikeTerms . groupLikeTerms
 
+{-# INLINE groupLikeTerms #-}
 groupLikeTerms ::Eq f =>  [Blade p q f] -> [[Blade p q f]]
 groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
 
 compareTol :: (Algebra.Algebraic.C f, Algebra.Absolute.C f, Ord f, SingI p, SingI q) => Multivector p q f -> Multivector p q f -> f -> Bool
 compareTol x y tol = ((NPN.abs $ magnitude (x-y) ) <= tol)
 
+{-#INLINE compensatedSum' #-}
 compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
 compensatedSum' xs = kahan zero zero xs where
     kahan s _ [] = s
@@ -128,7 +136,10 @@ compensatedSum' xs = kahan zero zero xs where
         in kahan t ((t-s)-y) xs
 
 --use this to sum taylor series et al with converge
---compensatedRunningSum :: (Algebra.Additive.C f) => [f] -> [f]
+{-#INLINE compensatedRunningSum#-}
+{-#SPECIALISE INLINE compensatedRunningSum :: [STVector] -> [STVector] #-}
+{-#SPECIALISE INLINE compensatedRunningSum :: [E3Vector] -> [E3Vector] #-}
+compensatedRunningSum :: (Algebra.Algebraic.C f, Ord f, SingI p, SingI q, Show f) => [Multivector p q f] -> [Multivector p q f]
 compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,zero) xs where
     kahanSum (s,c) b = (t,newc) where
         y = b - c
@@ -164,8 +175,12 @@ multiplyList1 l = mvNormalForm $ BladeSum listOfBlades where
 --things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
 --                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
 
+{-#INLINE sumList #-}
 sumList xs = mvNormalForm $ BladeSum $ concat $ map mvTerms xs
 
+{-#INLINE sumLikeTerms #-}
+{-#SPECIALISE INLINE sumLikeTerms :: [[STBlade]] -> [STBlade] #-}
+{-#SPECIALISE INLINE sumLikeTerms :: [[E3Blade]] -> [E3Blade] #-}
 sumLikeTerms :: (Algebra.Field.C f, SingI p, SingI q) => [[Blade p q f]] -> [Blade p q f]
 sumLikeTerms blades = map (\sameIxs -> map bScale sameIxs & compensatedSum' & (\result -> Blade result ((head sameIxs) & bIndices))) blades
 
@@ -181,15 +196,29 @@ instance (Algebra.Field.C f, SingI p, SingI q, Ord f) => Data.Monoid.Monoid (Pro
     mconcat = Product . foldl (*) one . map getProduct
 
 --Constructs a multivector from a scaled blade.
+{-#INLINE e#-}
 e :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => f -> [Natural] -> Multivector p q f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
+{-#INLINE scalar#-}
 scalar s = s `e` []
 
 
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector p q f)
 
+
+{-{-# RULES
+ "turn multiple additions into sumList" forall (f::Algebra.Field.C) (a::Multivector p q f) b c .  (+) a ((+) b c) = sumList [a,b,c]
+ #-}-}
+{-#RULES
+ "sumList[..] + a = sumList [..,a]" forall  (a::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) xs. (+) (sumList xs) a = sumList (a:xs)
+ #-}
+{-# RULES
+ "a+ sumList[..] = sumList [..,a]"  forall (a::Multivector p q (Algebra.Field.C f)) xs. (+) a (sumList xs) = sumList (a:xs)
+ #-}
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Additive.C (Multivector p q f) where
+    {-#INLINE (+)#-}
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
+    {-#INLINE (-)#-}
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
     zero = BladeSum [scalarBlade Algebra.Additive.zero]
 
@@ -201,6 +230,7 @@ Now it is time for the Clifford product. :3
 \begin{code}
 
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multivector p q f) where
+    {-#INLINE (*)#-}
     BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
     a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
@@ -212,6 +242,7 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multive
     a ^ 1 = a
     --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
     a ^ n  =  multiplyList (replicate (NPN.fromInteger n) a)
+
 
 two = fromInteger 2
 mul = (Algebra.Ring.*)
@@ -228,7 +259,11 @@ Clifford numbers have a magnitude and absolute value:
 
 \begin{code}
 
---magnitude :: (Algebra.Algebraic.C f) => Multivector f -> f
+
+{-# INLINE magnitude #-}
+{-# SPECIALISE INLINE magnitude:: Multivector 3 1 Double -> Double #-}
+{-# SPECIALISE INLINE magnitude:: Multivector 3 0 Double -> Double #-}
+magnitude :: (Algebra.Algebraic.C f) => Multivector p q f -> f
 magnitude = sqrt . compensatedSum' . map (\b -> (bScale b)^ 2) . mvTerms
 
 instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Algebra.Absolute.C (Multivector p q f) where
@@ -244,8 +279,9 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Module.C f (Mul
 
 --(/) :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => Multivector p q f -> f -> Multivector p q f
 --(/) v d = BladeSum $ map (bladeScaleLeft (NPN.recip d)) $ mvTerms v --Algebra.Field.recip d *> v
-
+{-#INLINE (</)#-}
 (</) n d = Numeric.Clifford.Multivector.inverse d * n
+{-#INLINE (/>)#-}
 (/>) n d = n * Numeric.Clifford.Multivector.inverse d
 (</>) n d = n /> d
 
@@ -257,7 +293,7 @@ scaleRight v s = BladeSum $ map (bladeScaleRight s) $ mvTerms v
 divideRight v s = scaleRight v (recip s)
 --integratePoly c x = c : zipWith (Numeric.Clifford.Multivector./) x progression
 
---converge :: (Eq f, Show f) => [f] -> f
+{-# INLINE converge#-}
 converge [] = error "converge: empty list"
 converge xs = fromMaybe empty (convergeBy checkPeriodic Just xs) 
     where
@@ -279,6 +315,10 @@ aitkensAcceleration (xn:xnp1:xnp2:xs) | xn == xnp1 = [xnp1]
     dxn = sumList [xnp1,negate xn]
     ddxn = sumList [xn,  (-2) *  xnp1, xnp2]
 
+{-# INLINABLE shanksTransformation #-}
+{-#SPECIALISE shanksTransformation :: [Multivector 3 0 Double] -> [Multivector 3 0 Double] #-}
+{-#SPECIALISE shanksTransformation :: [Multivector 3 1 Double] -> [Multivector 3 1 Double] #-}
+shanksTransformation :: (Algebra.Algebraic.C f, Ord f, Show f, SingI p, SingI q) =>  [Multivector p q f] -> [Multivector p q f]
 shanksTransformation [] = []
 shanksTransformation a@(xnm1:[]) = a
 shanksTransformation a@(xnm1:xn:[]) = a
@@ -291,13 +331,9 @@ shanksTransformation (xnm1:xn:xnp1:xs) | xnm1 == xn = [xn]
                                        denominator = sumList [xnp1, (-2)*xn, xnm1] 
 
 
---exp ::(Ord f, Show f, Algebra.Transcendental.C f)=> Multivector f -> Multivector f
 
 
-
-
-
-
+{-# INLINABLE takeEvery #-}
 takeEvery nth xs = case drop (nth-1) xs of
                      (y:ys) -> y : takeEvery nth ys
                      [] -> []
@@ -311,34 +347,45 @@ seriesMinusPlus (x:y:rest) = Algebra.Additive.negate x : y : seriesMinusPlus res
 
 
 
-
+{-#INLINE expTerms#-}
+{-# SPECIALISE INLINE expTerms :: STVector -> [STVector]#-}
+{-# SPECIALISE INLINE expTerms :: E3Vector -> [E3Vector]#-}
 expTerms :: (Algebra.Algebraic.C f, SingI p, SingI q, Ord f) => Multivector p q f -> [Multivector p q f]
 expTerms x = map snd $ iterate (\(n,b) -> (n + 1, (recip $ fromInteger n ) `scaleLeft` (x*b) )) (1::NPN.Integer,one)
 
 instance (Algebra.Transcendental.C f, Ord f, SingI p, SingI q, Show f) => Algebra.Transcendental.C (Multivector p q f) where
     pi = scalar pi
-    exp (BladeSum [ Blade s []]) = myTrace ("scalar exponential of " ++ show s) scalar $ Algebra.Transcendental.exp s
+    {-#INLINABLE exp#-}
+    {-# SPECIALISE INLINE exp :: STVector -> STVector #-}
+    {-# SPECIALISE INLINE exp :: E3Vector -> E3Vector #-}
+    exp (BladeSum [ Blade s []]) = myTrace ("scalar exponential of " ++ show s) scalar $ exp s
     exp x = myTrace ("Computing exponential of " ++ show x) convergeTerms x where --(expMag ^ expScaled) where
-        expMag = Algebra.Transcendental.exp mag
+        expMag = exp mag
         expScaled = converge $ shanksTransformation.shanksTransformation . compensatedRunningSum $ expTerms scaled 
         convergeTerms terms = converge $ shanksTransformation.shanksTransformation.compensatedRunningSum $ expTerms terms
         mag = myTrace ("In exponential, magnitude is " ++ show ( magnitude x)) magnitude x
         scaled = let val =  (recip mag) *> x in myTrace ("In exponential, scaled is" ++ show val) val
-
+    {-#INLINE log#-}
+    {-# SPECIALISE INLINE log :: STVector -> STVector #-}
+    {-# SPECIALISE INLINE log :: E3Vector -> E3Vector #-}
     log (BladeSum [Blade s []]) = scalar $ NPN.log s
-    log a = scalar (NPN.log mag) + log' scaled where
-        scaled = normalised a
-        mag = magnitude a
+    log a = scalar (log mag) + log' scaled where
+        (scaled,mag) = normalised a
         log' a = converge $  halleysMethod f f' f'' (one `e` [1,2])  where
+         {-#INLINABLE f#-}
          f x = a - exp x
+         {-#INLINABLE f'#-}
          f' x = NPN.negate $ exp x
+         {-#INLINABLE f''#-}
          f'' = f'
-
+    sin (BladeSum [Blade s []]) = scalar $ sin s
     sin x = converge $ shanksTransformation $ compensatedRunningSum $ sinTerms x where
       sinTerms x = seriesPlusMinus $ takeEvery 2 $ expTerms x
+    cos (BladeSum [Blade s []]) = scalar $ cos s
     cos x = converge $ shanksTransformation $ compensatedRunningSum (one : cosTerms x) where
       cosTerms x = seriesMinusPlus $ takeEvery 2 $ tail $ expTerms x
-
+    
+    atan (BladeSum [Blade s []]) = scalar $ atan s
     atan z = (z/onePlusZSquared) * (one + (converge $ shanksTransformation $ compensatedRunningSum $ map lambda [1..])) where
       lambda :: Integer -> Multivector p q f
       lambda n = multiplyList1 $ map innerFraction [1..n]
@@ -357,10 +404,12 @@ wedge a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bWedge` y | x
 (∧) = wedge :: Multivector p q f -> Multivector p q f -> Multivector p q f
 (⋅) = dot :: Multivector p q f -> Multivector p q f -> Multivector p q f
 
+{-# INLINE reverseBlade #-}
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
+{-# INLINE reverseMultivector #-}
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
-
+{-#INLINE inverse#-}
 inverse a@(BladeSum _)  = assert (a /= zero) $ (recip scalarComponent) *> (reverseMultivector a)  where
     scalarComponent = bScale (head $ mvTerms (a * reverseMultivector a))
 
@@ -398,14 +447,14 @@ instance (Algebra.Algebraic.C f, Show f, Ord f, SingI p, SingI q) =>  Algebra.Al
     root 0 _ = error "Cannot take 0th root"
     root _ (BladeSum []) = error "Empty bladesum"
     root _ (BladeSum [Blade zero []]) = error "Cannot compute a root of zero"
-    root n (BladeSum [Blade s []]) = scalar $ Algebra.Algebraic.root n s
+    root n (BladeSum [Blade s []]) = scalar $ root n s
     root n a@(BladeSum _) = converge $ rootIterationsStart n a g where
       g = if q' <= 1 then  one`e`[q',succ q'] else one + one `e` [0,1]
       (p',q') = signature a
 
 rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
-rootIterationsStart n a@(BladeSum (Blade s [] :xs)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero || q' == 1 then one else Algebra.Ring.one `e` [0,1] 
+rootIterationsStart n a@(BladeSum (Blade s [] :_)) one = rootHalleysIterations n a g where
+                     g = if s >= NPN.zero || q' == 1 then one else one `e` [0,1] 
                      (p',q') = signature a
                      
 rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
@@ -414,7 +463,7 @@ rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
 rootNewtonIterations :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootNewtonIterations n a = iterate xkplus1 where
                      xkplus1 xk = xk + deltaxk xk
-                     deltaxk xk = oneOverN * ((Numeric.Clifford.Multivector.inverse (xk ^ (n - one))* a)  - xk)
+                     deltaxk xk = oneOverN * ((inverse (xk ^ (n - one))* a)  - xk)
                      oneOverN = scalar $ NPN.recip $ fromInteger n
 
 rootHalleysIterations :: (Show a, Ord a, Algebra.Algebraic.C a, SingI p, SingI q) => NPN.Integer -> Multivector p q a -> Multivector p q a -> [Multivector p q a]
@@ -429,11 +478,12 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
     up = numerator ratio
     down = denominator ratio-}
 
+{-#INLINE halleysMethod #-}
 halleysMethod :: (Show a, Ord a, Algebra.Algebraic.C a, SingI p, SingI q) => (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> Multivector p q a -> [Multivector p q a]
 halleysMethod f f' f'' = iterate update where
-    update x = x - (numerator x * Numeric.Clifford.Multivector.inverse (denominator x)) where
-        numerator x = multiplyList [2, fx, dfx]
-        denominator x = multiplyList [2, dfx, dfx] - (fx * ddfx)
+    update x = x - (numerator x * inverse (denominator x) ) where
+        numerator x= multiplyList [2, fx, dfx]
+        denominator x= multiplyList [2, dfx, dfx] - (fx * ddfx)
         fx = f x
         dfx = f' x
         ddfx = f'' x
@@ -450,9 +500,12 @@ secantMethod f x0 x1 = update x1 x0  where
 Now let's try logarithms by fixed point iteration. It's gonna be slow, but whatever!
 
 \begin{code}
-
-normalised :: (Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => Multivector p q f -> Multivector p q f
-normalised a = a `scaleRight` ( NPN.recip $ magnitude a)
+{-#INLINE normalised#-}
+{-#SPECIALISE INLINE normalised :: STVector -> (STVector, Double) #-}
+{-#SPECIALISE INLINE normalised :: E3Vector -> (E3Vector, Double) #-}
+normalised :: (Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => Multivector p q f -> (Multivector p q f,f)
+normalised a = (a `scaleRight` ( recip $ mag),mag) where
+    mag = magnitude a
 
 
 \end{code}

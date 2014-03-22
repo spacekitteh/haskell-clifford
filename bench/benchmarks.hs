@@ -14,8 +14,7 @@ import           Data.List.Stream
 import           NumericPrelude   hiding (iterate, last, map, take, log)
 import           Prelude          hiding (iterate, last, map, negate, take,log, (*),
                                    (+))
-                                   
-type STVector = Multivector 3 1 Double
+
 scalar2 = scalar (2.0::NumericPrelude.Double) :: STVector
 ij2 = (2.0::NumericPrelude.Double) `e` [1,2] :: STVector 
 ik3 = (3::NumericPrelude.Double) `e` [1,3] :: STVector 

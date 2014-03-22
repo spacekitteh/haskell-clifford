@@ -66,13 +66,18 @@ The first problem: How to represent basis blades. One way to do it is via genera
 data Blade (p :: Nat) (q :: Nat) f where
     Blade :: forall p q f . (SingI p, SingI q, Algebra.Field.C f) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
 
+type STBlade = Blade 3 1 Double
+type E3Blade = Blade 3 0 Double
 scale :: Lens' (Blade p q f) f
 scale = lens _scale (\blade v -> blade {_scale = v})
 indices :: Lens' (Blade p q f) [Natural]
 indices = lens _indices (\blade v -> blade {_indices = v})
 dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Blade p q f ->  (Natural,Natural)
 dimension _ = (toNatural  ((GHC.Real.fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural((GHC.Real.fromIntegral $ fromSing (sing :: Sing q))::Word))
+
+bScale :: Blade p q f -> f
 bScale b =  b^.scale
+bIndices :: Blade p q f -> [Natural]
 bIndices b = b^.indices
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade p q f)
 instance(Show f) =>  Show (Blade p q f) where
@@ -99,11 +104,15 @@ scalarBlade d = Blade d []
 zeroBlade :: (Algebra.Field.C f, SingI p, SingI q) => Blade p q f
 zeroBlade = scalarBlade Algebra.Additive.zero
 
+bladeNonZero :: (Algebra.Additive.C f, Eq f) => Blade p q f -> Bool
 bladeNonZero b = b^.scale /= Algebra.Additive.zero
 
+bladeNegate :: (Algebra.Additive.C f) =>  Blade p q f -> Blade p q f
 bladeNegate b = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)
 
+bladeScaleLeft :: f -> Blade p q f -> Blade p q f
 bladeScaleLeft s (Blade f ind) = Blade (s * f) ind
+bladeScaleRight :: f -> Blade p q f -> Blade p q f
 bladeScaleRight s (Blade f ind) = Blade (f * s) ind
 \end{code}
 
@@ -118,6 +127,9 @@ However, the plain data constructor should never be used, for it doesn't order t
 
 \begin{code}
 
+{-#INLINE bladeNormalForm#-}
+{-#SPECIALISE INLINE bladeNormalForm::E3Blade -> E3Blade #-}
+{-#SPECIALISE INLINE bladeNormalForm :: STBlade -> STBlade #-}
 bladeNormalForm :: forall (p::Nat) (q::Nat) f.  Blade p q f -> Blade p q f
 bladeNormalForm (Blade scale indices)  = result 
         where
@@ -130,6 +142,7 @@ bladeNormalForm (Blade scale indices)  = result
              scale' = if doNotNegate  then scale else negate scale
              (newIndices, doNotNegate) = sortIndices (indices,q')
 
+sortIndices :: ([Natural],Integer) -> ([Natural],Bool)
 sortIndices = memo sortIndices' where
 sortIndices' :: ([Natural],Integer) -> ([Natural],Bool) 
 sortIndices' (indices,q') = (uniqueSorted, doNotNegate) where
@@ -167,6 +180,9 @@ bladeGetGrade k blade@(Blade _ _) =
 First up for operations: Blade multiplication. This is no more than assembling orthogonal vectors into k-vectors. 
 
 \begin{code}
+{-#INLINE bladeMul #-}
+{-#SPECIALISE INLINE bladeMul :: STBlade -> STBlade -> STBlade #-}
+{-#SPECIALISE INLINE bladeMul :: E3Blade -> E3Blade -> E3Blade #-}
 bladeMul ::  Blade p q f -> Blade p q f-> Blade p q f
 bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y) 
 multiplyBladeList :: (SingI p, SingI q, Algebra.Field.C f) => [Blade p q f] -> Blade p q f
@@ -200,6 +216,7 @@ bDot x y = bladeNormalForm $ bladeGetGrade k xy
             k = Algebra.Absolute.abs $ grade x - grade y
             xy = bladeMul x y
 
+propBladeDotAssociative :: (Algebra.Additive.C f, Eq f) => Blade p q f -> Blade p q f -> Blade p q f -> Bool
 propBladeDotAssociative = Algebra.Laws.associative bDot
 
 \end{code}
@@ -212,17 +229,14 @@ Now for linear combinations of (possibly different basis) blades. To start with,
 instance (Algebra.Additive.C f, Ord f) => Ord (Blade p q f) where
     compare a b | bIndices a == bIndices b = compare (bScale a) (bScale b)
                 | otherwise = compareIndices (bIndices a) (bIndices b)
+
+compareIndices :: [Natural] -> [Natural] -> Ordering
 compareIndices = memo compareIndices' where
     compareIndices' a b =  case compare (length a) (length b) of
                                 LT -> LT
                                 GT -> GT
                                 EQ -> compare a b
 
-instance Arbitrary Natural where
-    arbitrary = sized $ \n ->
-                let n' = NPN.abs n in
-                 fmap (toNatural . (\x -> (GHC.Real.fromIntegral x)::Word)) (choose (0, n'))
-    shrink = shrinkIntegral
 
 instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f) => Arbitrary (Blade p q f) where
     arbitrary = do
@@ -247,13 +261,8 @@ Now for some testing of algebraic laws.
 
 \begin{code}
 
-{- Note: Figure out what this is meant to be lol
-skewcommutative op x y = x `op` y == (bladeScaleLeft (fromInteger (-1))$ y `op` x)
 
-propAnticommutativeMultiplication :: (Eq f,Algebra.Ring.C f, Algebra.Additive.C f) => Blade f -> Blade f -> Bool
-propAnticommutativeMultiplication = anticommutative bladeMul
--}
-propCommutativeAddition = commutative (+)
+--propCommutativeAddition = commutative (+)
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}

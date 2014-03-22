@@ -13,7 +13,7 @@ import Control.Exception (evaluate)
 main :: IO ()
 main = hspec spec
 
-type STVector = Multivector 3 1 Double
+
 spec :: Spec
 spec = do
   let i = 1.0 `e` [1,2] :: STVector

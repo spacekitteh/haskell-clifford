@@ -134,6 +134,10 @@ data RKAttribute f state = Explicit
 
 $( derive makeIs ''RKAttribute)
 
+{-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double stateType] -> RKStepper 3 0 Double stateType#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double [E3Vector]] -> RKStepper 3 0 Double [E3Vector]#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double stateType] -> RKStepper 3 1 Double stateType#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double [STVector]] -> RKStepper 3 1 Double [STVector]#-}
 genericRKMethod :: forall (p::Nat) (q::Nat) t stateType . 
                   ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, SingI p, SingI q)
                   =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper p q t stateType
@@ -144,6 +148,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     c n = l !!  (n-1) where
         l = _tableauC tableau
     a :: Int -> [t]
+    {-#INLINE a#-}
     a n = (l !! (n-1)) & filter (/= zero) where
         l = _tableauA tableau
     b :: Int -> t
@@ -164,6 +169,11 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                         Just (AdaptiveStepSize sigma) -> sigma
                         Nothing -> (\_ _ -> one)
 
+    {-#INLINE rkMethodImplicitFixedPoint#-}
+--    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double stateType #-}
+--    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double [E3Vector] #-}
+--    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 1 Double stateType #-}
+--    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 1 Double [STVector] #-}        
     rkMethodImplicitFixedPoint :: RKStepper p q t stateType
     rkMethodImplicitFixedPoint h f project unproject (time, state) =
         (time + (stepSizeAdapter time state)*h*(c s), newState) where
@@ -180,8 +190,10 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector p q t] -> [Multivector p q t]
             zkp1 i zk = map (h*>) (sumOfJs i zk) where
+                {-#INLINE sumOfJs#-}
                 sumOfJs :: Int -> [Multivector p q t] -> [Multivector p q t]
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
+                    {-# INLINE scaledByAij #-}
                     scaledByAij :: [Multivector p q t] -> t -> [Multivector p q t]
                     scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
 
@@ -189,6 +201,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         newState :: stateType
         newState = project $ elementAdd state' (assert (not $  null dy) dy)
         dy = sumListOfLists  [map ((b i) *>) (zi i) | i <- [1..s]] :: [Multivector p q t]
+        {-#INLINE evalDerivatives #-}
         evalDerivatives :: t -> [Multivector p q t] -> [Multivector p q t]
         evalDerivatives time stateAtTime= unproject $ (f time) $ project stateAtTime
 

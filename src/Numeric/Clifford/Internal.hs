@@ -7,6 +7,8 @@ import Data.MemoTrie
 import Data.List.Stream
 import Control.Arrow
 import Data.Bits
+import Test.QuickCheck
+import Data.Word
 import qualified Debug.Trace as DebugTrace
 #ifdef DEBUG
 myTrace = DebugTrace.trace
@@ -18,6 +20,14 @@ instance HasTrie Natural where
     trie f = NaturalTrie (trie (f . unbitsZ)) 
     untrie (NaturalTrie t) = untrie t . bitsZ
     enumerate (NaturalTrie t) = enum' unbitsZ t
+
+
+instance Arbitrary Natural where
+    arbitrary = sized $ \n ->
+                let n' = abs n in
+                 fmap (toNatural . (\x -> (fromIntegral x)::Word)) (choose (0, n'))
+    shrink = shrinkIntegral
+
 
 
 unbitsZ :: (Prelude.Num n, Bits n) => (Bool,[Bool]) -> n
