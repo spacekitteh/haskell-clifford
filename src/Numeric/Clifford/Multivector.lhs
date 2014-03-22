@@ -207,7 +207,7 @@ instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector p q f
 
 
 {-{-# RULES
- "turn multiple additions into sumList" forall (f::Algebra.Field.C) (a::Multivector p q f) b c .  (+) a ((+) b c) = sumList [a,b,c]
+ "turn multiple additions into sumList" forall (a::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) (b::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) (c::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) .  (+) a ((+) b c) = sumList [a,b,c]
  #-}-}
 {-#RULES
  "sumList[..] + a = sumList [..,a]" forall  (a::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) xs. (+) (sumList xs) a = sumList (a:xs)
@@ -217,8 +217,12 @@ instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector p q f
  #-}
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Additive.C (Multivector p q f) where
     {-#INLINE (+)#-}
+    {-#SPECIALISE (+)::STVector -> STVector -> STVector #-}
+    {-#SPECIALISE (+)::E3Vector -> E3Vector -> E3Vector #-}
     a + b =  mvNormalForm $ BladeSum (mvTerms a ++ mvTerms b)
     {-#INLINE (-)#-}
+    {-#SPECIALISE (-)::STVector -> STVector -> STVector #-}
+    {-#SPECIALISE (-)::E3Vector -> E3Vector -> E3Vector #-}
     a - b =  mvNormalForm $ BladeSum (mvTerms a ++ map bladeNegate (mvTerms b))
     zero = BladeSum [scalarBlade Algebra.Additive.zero]
 
@@ -228,9 +232,19 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Additive.C (Mul
 Now it is time for the Clifford product. :3
 
 \begin{code}
-
+{-{-# RULES
+ "turn multiple multiplications into multiplyList1" forall (a::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) b c .  (*) ((*) a b) c = multiplyList1 [a,b,c]
+ #-}-}
+{-#RULES
+ "multiplyList1[..] * a = multiplyList1 [..,a]" forall  (a::Multivector (p::Nat) (q::Nat) (Algebra.Field.C f)) xs. (*) (multiplyList1 xs) a = multiplyList1 (concat [xs,[a]])
+ #-}
+{-# RULES
+ "a* multiplyList1[..] = multiplyList1 [..,a]"  forall (a::Multivector p q (Algebra.Field.C f)) xs. (*) a (multiplyList1 xs) = multiplyList1 (a:xs)
+ #-}
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multivector p q f) where
     {-#INLINE (*)#-}
+    {-#SPECIALISE (*)::STVector ->STVector -> STVector#-}
+    {-#SPECIALISE (*)::E3Vector ->E3Vector ->E3Vector #-}
     BladeSum [Blade s []] * b = BladeSum $ map (bladeScaleLeft s) $ mvTerms b
     a * BladeSum [Blade s []] = BladeSum $ map (bladeScaleRight s) $ mvTerms a 
     a * b = mvNormalForm $ BladeSum [bladeMul x y | x <- mvTerms a, y <- mvTerms b]
@@ -273,6 +287,9 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f, SingI p, SingI q) 
 
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Module.C f (Multivector p q f) where
 --    (*>) zero v = Algebra.Additive.zero
+    {-#INLINE (*>) #-}
+    {-#SPECIALISE INLINE (*>) :: Double -> STVector -> STVector #-}
+    {-#SPECIALISE INLINE (*>) :: Double -> E3Vector -> E3Vector #-}
     (*>) s v = v & mvTerms & map (bladeScaleLeft s) & BladeSum
 
 
@@ -410,6 +427,8 @@ reverseBlade b = bladeNormalForm $ b & indices %~ reverse
 reverseMultivector v = mvNormalForm $ v & terms.traverse%~ reverseBlade
 
 {-#INLINE inverse#-}
+{-#SPECIALISE INLINE inverse :: STVector -> STVector #-}
+{-# SPECIALISE INLINE inverse :: E3Vector -> E3Vector #-}
 inverse a@(BladeSum _)  = assert (a /= zero) $ (recip scalarComponent) *> (reverseMultivector a)  where
     scalarComponent = bScale (head $ mvTerms (a * reverseMultivector a))
 
@@ -454,7 +473,7 @@ instance (Algebra.Algebraic.C f, Show f, Ord f, SingI p, SingI q) =>  Algebra.Al
 
 rootIterationsStart ::(Ord f, Show f, Algebra.Algebraic.C f)=>  NPN.Integer -> Multivector p q f -> Multivector p q f -> [Multivector p q f]
 rootIterationsStart n a@(BladeSum (Blade s [] :_)) one = rootHalleysIterations n a g where
-                     g = if s >= NPN.zero || q' == 1 then one else one `e` [0,1] 
+                     g = if s >= NPN.zero || q' == 1 then one else (Algebra.Ring.one `e` [0,1])
                      (p',q') = signature a
                      
 rootIterationsStart n a@(BladeSum _) g = rootHalleysIterations n a g
@@ -479,6 +498,8 @@ rootHalleysIterations n a = halleysMethod f f' f'' where
     down = denominator ratio-}
 
 {-#INLINE halleysMethod #-}
+{-#SPECIALISE halleysMethod :: (STVector->STVector)->(STVector->STVector)->(STVector->STVector)->STVector->[STVector]#-}
+{-#SPECIALISE halleysMethod :: (E3Vector->E3Vector)->(E3Vector->E3Vector)->(E3Vector->E3Vector)->E3Vector->[E3Vector]#-}
 halleysMethod :: (Show a, Ord a, Algebra.Algebraic.C a, SingI p, SingI q) => (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> (Multivector p q a -> Multivector p q a) -> Multivector p q a -> [Multivector p q a]
 halleysMethod f f' f'' = iterate update where
     update x = x - (numerator x * inverse (denominator x) ) where

@@ -75,8 +75,10 @@ indices = lens _indices (\blade v -> blade {_indices = v})
 dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Blade p q f ->  (Natural,Natural)
 dimension _ = (toNatural  ((GHC.Real.fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural((GHC.Real.fromIntegral $ fromSing (sing :: Sing q))::Word))
 
+{-#INLINE bScale #-}
 bScale :: Blade p q f -> f
 bScale b =  b^.scale
+{-#INLINE bIndices #-}
 bIndices :: Blade p q f -> [Natural]
 bIndices b = b^.indices
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Blade p q f)
@@ -110,9 +112,15 @@ bladeNonZero b = b^.scale /= Algebra.Additive.zero
 bladeNegate :: (Algebra.Additive.C f) =>  Blade p q f -> Blade p q f
 bladeNegate b = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)
 
+{-#INLINE bladeScaleLeft #-}
+{-#SPECIALISE bladeScaleLeft::Double->STBlade -> STBlade#-}
+{-#SPECIALISE bladeScaleLeft::Double->E3Blade -> E3Blade#-}
 bladeScaleLeft :: f -> Blade p q f -> Blade p q f
 bladeScaleLeft s (Blade f ind) = Blade (s * f) ind
 bladeScaleRight :: f -> Blade p q f -> Blade p q f
+{-#INLINE bladeScaleRight #-}
+{-#SPECIALISE bladeScaleRight::Double->STBlade -> STBlade#-}
+{-#SPECIALISE bladeScaleRight::Double->E3Blade -> E3Blade#-}
 bladeScaleRight s (Blade f ind) = Blade (f * s) ind
 \end{code}
 
@@ -136,9 +144,7 @@ bladeNormalForm (Blade scale indices)  = result
              result = if (any (\i -> (GHC.Real.toInteger i) >= d) indices) then zeroBlade else Blade scale' newIndices
              p' = (fromSing (sing :: Sing p)) :: Integer
              q' = (fromSing (sing :: Sing q)) :: Integer
-             d = p' + q'
-             
-             
+             d = p' + q'             
              scale' = if doNotNegate  then scale else negate scale
              (newIndices, doNotNegate) = sortIndices (indices,q')
 
