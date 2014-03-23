@@ -23,13 +23,15 @@ What is a linear operator? Just a Vector -> Vector!
 \begin{code}
 
 -- linear operators appear to satisfy monad laws. possible design: use accumulate operator elements, simplify them down to a single operator, and then apply that to a multivector
-data LinearOperator p q f g where
-    LinearOperator :: {_operator :: Multivector p q f -> Multivector p q g} -> LinearOperator p q f g
-type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> LinearOperator p q f f
+data LinearOperator' p q f g where
+    LinearOperator' :: {_operator' :: Multivector p q f -> Multivector p q g} -> LinearOperator' p q f g
+    LinearOperator :: {_operator :: Multivector p q f -> Multivector p q f} -> LinearOperator' p q f f
+type LinearOperator p q f = LinearOperator' p q f f
+type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> LinearOperator p q f
 
-instance Category (LinearOperator p q) where
-    id = LinearOperator NP.id
-    (.) (LinearOperator a) (LinearOperator b)  = LinearOperator (a NP.. b)
+instance Category (LinearOperator' p q) where
+    id = LinearOperator' NP.id
+    (.) (LinearOperator' a) (LinearOperator' b)  = LinearOperator' (a NP.. b)
 
 
 {-instance Arrow (LinearOperator p q) where
@@ -39,7 +41,7 @@ instance Category (LinearOperator p q) where
        --applyToScales z@(BladeSum indices) = BladeSum $ map (\z@(Numeric.Clifford.Blade.Blade scale x) -> Numeric.Clifford.Blade.Blade (func scale) x ) indices
    first = undefined
 -}
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Monoid (LinearOperator p q f f) where
+instance (Algebra.Field.C f, Ord f,Algebra.Field.C g, Ord g, SingI p, SingI q, f~g) => Monoid (LinearOperator' p q f g) where
     mempty = id
     mappend = (.)
 
