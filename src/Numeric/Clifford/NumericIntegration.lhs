@@ -155,6 +155,9 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     b i = l !! (i - 1) where
         l = _tableauB tableau
     
+    {-#INLINE sumListOfLists #-}
+--    {-#SPECIALISE INLINE sumListOfLists :: [[STVector]]->[STVector]#-}
+--    {-#SPECIALISE INLINE sumListOfLists :: [[Vector]]->[E3Vector]#-}
     sumListOfLists :: [[Multivector p q t]] -> [Multivector p q t]
     sumListOfLists = map sumList . transpose 
 

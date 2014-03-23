@@ -1,4 +1,5 @@
 -*-change-log-*-
+	0.1.0.12 Adding type signatures to top level stuff
 	0.1.0.11 More inlining and specialisation
 	0.1.0.10 Fixed compile error whoops
 	0.1.0.9 Inlined/specialised a bunch of function, hueg speed increase

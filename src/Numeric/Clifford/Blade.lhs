@@ -64,7 +64,7 @@ The first problem: How to represent basis blades. One way to do it is via genera
 \begin{code}
 
 data Blade (p :: Nat) (q :: Nat) f where
-    Blade :: forall p q f . (SingI p, SingI q, Algebra.Field.C f) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
+    Blade :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, SingI p, SingI q) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
 
 type STBlade = Blade 3 1 Double
 type E3Blade = Blade 3 0 Double

@@ -86,7 +86,7 @@ A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
 data Multivector (p::Nat) (q::Nat) f where
-    BladeSum :: forall p q f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
+    BladeSum :: forall (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f,SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
 
 type STVector = Multivector 3 1 Double
 type E3Vector = Multivector 3 0 Double
@@ -415,11 +415,15 @@ instance (Algebra.Transcendental.C f, Ord f, SingI p, SingI q, Show f) => Algebr
     cosh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ expTerms x
     sinh x = converge $ shanksTransformation . compensatedRunningSum $ takeEvery 2 $ tail $ expTerms x
 
+dot :: Multivector p q f -> Multivector p q f -> Multivector p q f
 dot a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bDot` y | x <- mvTerms a, y <- mvTerms b]
+wedge::Multivector p q f -> Multivector p q f->Multivector p q f
 wedge a@(BladeSum _)  b@(BladeSum _) = mvNormalForm $ BladeSum [x `bWedge` y | x <- mvTerms a, y <- mvTerms b]
 
-(∧) = wedge :: Multivector p q f -> Multivector p q f -> Multivector p q f
-(⋅) = dot :: Multivector p q f -> Multivector p q f -> Multivector p q f
+(∧) :: Multivector p q f -> Multivector p q f -> Multivector p q f
+(∧) = wedge 
+(⋅) :: Multivector p q f -> Multivector p q f -> Multivector p q f
+(⋅) = dot 
 
 {-# INLINE reverseBlade #-}
 reverseBlade b = bladeNormalForm $ b & indices %~ reverse 
