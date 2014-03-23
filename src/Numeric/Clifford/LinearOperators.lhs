@@ -74,6 +74,7 @@ rotatePlaneAngle plane angle = rotate (exp (((fst.normalised) plane) * (angle/2)
 makeRotationOperator :: LinearOperatorCreator p q f
 makeRotationOperator u = LinearOperator (rotate u)
 
+makeRotationOperatorFromPlaneAngle plane angle = LinearOperator (rotatePlaneAngle plane angle)
 project u x = inverse u * (u `dot` x)
 
 makeProjectionOperator :: LinearOperatorCreator p q f
