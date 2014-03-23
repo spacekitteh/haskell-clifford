@@ -68,8 +68,8 @@ data Blade (p :: Nat) (q :: Nat) f where
 
 type STBlade = Blade 3 1 Double
 type E3Blade = Blade 3 0 Double
-scale :: Lens' (Blade p q f) f
-scale = lens _scale (\blade v -> blade {_scale = v})
+--scale :: Lens (Blade p q f) (Blade p q g) f g
+scale = lens _scale (\b@(Blade _ ind) v -> Blade v ind)
 indices :: Lens' (Blade p q f) [Natural]
 indices = lens _indices (\blade v -> blade {_indices = v})
 dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Blade p q f ->  (Natural,Natural)
@@ -77,7 +77,7 @@ dimension _ = (toNatural  ((GHC.Real.fromIntegral $ fromSing (sing :: Sing p))::
 
 {-#INLINE bScale #-}
 bScale :: Blade p q f -> f
-bScale b =  b^.scale
+bScale b@(Blade _ _) =  b^.scale
 {-#INLINE bIndices #-}
 bIndices :: Blade p q f -> [Natural]
 bIndices b = b^.indices
@@ -107,10 +107,10 @@ zeroBlade :: (Algebra.Field.C f, SingI p, SingI q) => Blade p q f
 zeroBlade = scalarBlade Algebra.Additive.zero
 
 bladeNonZero :: (Algebra.Additive.C f, Eq f) => Blade p q f -> Bool
-bladeNonZero b = b^.scale /= Algebra.Additive.zero
+bladeNonZero b@(Blade _ _) = b^.scale /= Algebra.Additive.zero
 
 bladeNegate :: (Algebra.Additive.C f) =>  Blade p q f -> Blade p q f
-bladeNegate b = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)
+bladeNegate b@(Blade _ _) = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)
 
 {-#INLINE bladeScaleLeft #-}
 {-#SPECIALISE bladeScaleLeft::Double->STBlade -> STBlade#-}

@@ -1,7 +1,8 @@
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, RankNTypes, KindSignatures, DataKinds, GADTs #-}
+{-# LANGUAGE NoImplicitPrelude, RankNTypes, KindSignatures, DataKinds, GADTs, FlexibleInstances, UndecidableInstances, InstanceSigs #-}
 module Numeric.Clifford.LinearOperators where
-import NumericPrelude
+import qualified NumericPrelude as NP ((.), id)
+import NumericPrelude hiding ((.), id)
 import Numeric.Clifford.Multivector
 import Algebra.Algebraic
 import Algebra.Field
@@ -9,30 +10,42 @@ import Algebra.Transcendental
 import GHC.TypeLits
 import Data.Monoid
 import Control.Applicative
+import Control.Category
+import Control.Arrow
 import Control.Monad
+import qualified Control.Lens
+import Control.Lens.Operators
+import Data.Semigroupoid
+import qualified Numeric.Clifford.Blade
 \end{code}
 What is a linear operator? Just a Vector -> Vector!
 
 \begin{code}
 
 -- linear operators appear to satisfy monad laws. possible design: use accumulate operator elements, simplify them down to a single operator, and then apply that to a multivector
-data LinearOperator (p::Nat) (q::Nat) f where
-    LinearOperator :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => {_operator :: Multivector p q f -> Multivector p q f} -> LinearOperator p q f
-type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> LinearOperator p q f
+data LinearOperator p q f g where
+    LinearOperator :: {_operator :: Multivector p q f -> Multivector p q g} -> LinearOperator p q f g
+type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> LinearOperator p q f f
 
-instance Functor (LinearOperator p q) where
-    fmap func (LinearOperator a) = LinearOperator (func a)
-instance Applicative (LinearOperator p q) where
-    pure a = LinearOperator a
-    (<*>) = ap
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Monoid (LinearOperator p q f) where
-    mempty = LinearOperator NumericPrelude.id
-    mappend a b = a . b
+instance Category (LinearOperator p q) where
+    id = LinearOperator NP.id
+    (.) (LinearOperator a) (LinearOperator b)  = LinearOperator (a NP.. b)
 
 
-instance forall (p::Nat) (q::Nat). Monad (LinearOperator p q) where
-    return a =LinearOperator a
-    (>>=) a action = action (_operator a)
+{-instance Arrow (LinearOperator p q) where
+--   arr :: forall b c. {-(Algebra.Field.C c, Ord c) =>-}  (b -> c) -> LinearOperator p q b c
+   arr func = undefined
+       --applyToScales z@(BladeSum indices) = BladeSum $ map (\blade@(Blade _ _) -> 
+       --applyToScales z@(BladeSum indices) = BladeSum $ map (\z@(Numeric.Clifford.Blade.Blade scale x) -> Numeric.Clifford.Blade.Blade (func scale) x ) indices
+   first = undefined
+-}
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Monoid (LinearOperator p q f f) where
+    mempty = id
+    mappend = (.)
+
+
+
+
 reflect u x = (-u)*x*recip u
 
 makeReflectionOperator ::LinearOperatorCreator p q f
