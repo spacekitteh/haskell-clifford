@@ -80,9 +80,9 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame (p::Nat) (q::Nat) t = ReferenceFrame {basisVectors :: [Multivector p q t]}
+data ReferenceFrame (p::Nat) (q::Nat) t = ReferenceFrame {basisFrame :: [Multivector p q t]}
 psuedoScalar' :: forall f (p::Nat) (q::Nat). (Ord f, Algebra.Field.C f, SingI p, SingI q) => ReferenceFrame p q f -> Multivector p q f
-psuedoScalar'  = multiplyList . basisVectors
+psuedoScalar'  = multiplyList . basisFrame
 
 
 

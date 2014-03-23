@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
 {-# LANGUAGE TypeOperators, TypeFamilies,CPP #-}
-module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate) where
+module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension) where
 import Numeric.Natural
 import Prelude hiding (head,tail, null)
 import Data.MemoTrie
@@ -21,6 +21,8 @@ instance HasTrie Natural where
     untrie (NaturalTrie t) = untrie t . bitsZ
     enumerate (NaturalTrie t) = enum' unbitsZ t
 
+dimension :: Natural -> Natural -> Natural
+dimension p q = pred $ p + q
 
 instance Arbitrary Natural where
     arbitrary = sized $ \n ->

@@ -1,11 +1,12 @@
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, RankNTypes, KindSignatures, DataKinds, GADTs, FlexibleInstances, UndecidableInstances, InstanceSigs #-}
+{-# LANGUAGE NoImplicitPrelude, RankNTypes, KindSignatures, DataKinds, GADTs, FlexibleInstances, UndecidableInstances, InstanceSigs, MultiParamTypeClasses #-}
 module Numeric.Clifford.LinearOperators where
 import qualified NumericPrelude as NP ((.), id)
-import NumericPrelude hiding ((.), id)
+import NumericPrelude hiding ((.), id, (!!), zipWith, map, length)
 import Numeric.Clifford.Multivector
 import Algebra.Algebraic
 import Algebra.Field
+import Algebra.Ring
 import Algebra.Transcendental
 import GHC.TypeLits
 import Data.Monoid
@@ -13,9 +14,13 @@ import Control.Applicative
 import Control.Category
 import Control.Arrow
 import Control.Monad
+import Data.List.Stream
 import qualified Control.Lens
 import Control.Lens.Operators
 import Data.Semigroupoid
+import Numeric.Natural
+import Data.Word
+import Numeric.Clifford.Internal
 import qualified Numeric.Clifford.Blade
 \end{code}
 What is a linear operator? Just a Vector -> Vector!
@@ -33,19 +38,29 @@ instance Category (LinearOperator' p q) where
     id = LinearOperator' NP.id
     (.) (LinearOperator' a) (LinearOperator' b)  = LinearOperator' (a NP.. b)
 
-
-{-instance Arrow (LinearOperator p q) where
---   arr :: forall b c. {-(Algebra.Field.C c, Ord c) =>-}  (b -> c) -> LinearOperator p q b c
-   arr func = undefined
-       --applyToScales z@(BladeSum indices) = BladeSum $ map (\blade@(Blade _ _) -> 
-       --applyToScales z@(BladeSum indices) = BladeSum $ map (\z@(Numeric.Clifford.Blade.Blade scale x) -> Numeric.Clifford.Blade.Blade (func scale) x ) indices
-   first = undefined
--}
 instance (Algebra.Field.C f, Ord f,Algebra.Field.C g, Ord g, SingI p, SingI q, f~g) => Monoid (LinearOperator' p q f g) where
     mempty = id
     mappend = (.)
 
 
+
+
+class LinearOperatorClass' (p::Nat) (q::Nat) f g where
+
+{-
+[[f11, f12, f13],
+ [f21, f22, f21],
+ [f31, f32, f33]]
+-}
+createFunctionalFromElements :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [[f]] ->(Multivector p q f -> Multivector p q f)
+createFunctionalFromElements elements = (\x -> f*x) where
+    d = (length elements) - 1
+    f = sumList $ map elementsForK [0..d]
+    column k = let transposed = transpose elements in transposed !! k   
+    elementsForK k =sumList $   zipWith (scaleRight) basisVectors (column k) 
+    
+createLinearOperatorFromElements :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [[f]] -> LinearOperator p q f
+createLinearOperatorFromElements  = LinearOperator .  createFunctionalFromElements
 
 
 reflect u x = (-u)*x*recip u

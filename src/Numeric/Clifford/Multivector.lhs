@@ -107,6 +107,13 @@ deriving instance (Show f) => Show (Multivector p q f)
 signature :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Multivector p q f ->  (Natural,Natural)
 signature _ = (toNatural  ((fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural  ((fromIntegral $ fromSing (sing :: Sing q))::Word))
 
+basisVectors :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [Multivector p q f]
+basisVectors = map (sigma) [0..d] where
+    sigma :: Natural -> Multivector p q f
+    sigma j = (Algebra.Ring.one) `e` [j]    
+    d = let (p', q') = signature (undefined :: Multivector p q f) in pred ( (PNum.+) p' q')
+
+
 terms :: Lens' (Multivector p q f) [Blade p q f]
 terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
 
