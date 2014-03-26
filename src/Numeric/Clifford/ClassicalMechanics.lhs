@@ -32,7 +32,7 @@ import Numeric.Clifford.Multivector as MV
 import Numeric.Clifford.Blade
 import GHC.TypeLits
 import Data.Proxy
-import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate, all)
+import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate, all, (.) )
 import Algebra.Absolute
 import Algebra.Algebraic
 import Algebra.Additive
@@ -55,9 +55,11 @@ import Data.Maybe
 import Data.DeriveTH
 import Data.Word
 import Numeric.Clifford.Internal
+import Numeric.Clifford.LinearOperators
 import Control.Applicative
+import Data.Monoid
+import Control.Category
 
-type DefaultField = Double
 nonEqualFrames = "Non-equal reference frames! Insert code here to translate between them! :) Should really make reference frames as types and then have type families to convert between them :v :v :v"
 
 
@@ -82,27 +84,26 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {originRelToParent:: Multivector p q t, rotationRelToParent :: Multivector p q t, parent :: ReferenceFrame p q t}
+data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {euclideanMove :: EuclideanMove p q t, parent :: ReferenceFrame p q t}
                                         |GlobalAbsoluteFrame deriving (Eq, Show)
 
 
-getRigidDisplacementRelToInertial ::(Algebra.Field.C t, SingI p, SingI q, Ord t) =>  ReferenceFrame p q t -> Multivector p q t
-getRigidDisplacementRelToInertial GlobalAbsoluteFrame = one
-getRigidDisplacementRelToInertial (RelativeFrame origin rotation mother) = undefined
+getRigidDisplacementRelToInertial :: (Algebra.Field.C t, Ord t, SingI p, SingI q) =>  ReferenceFrame p q t -> EuclideanMove   p q t
+getRigidDisplacementRelToInertial GlobalAbsoluteFrame = mempty
+getRigidDisplacementRelToInertial (RelativeFrame displacement mother) = displacement <> (getRigidDisplacementRelToInertial mother)
 
-data InertialFrame (p::Nat) (q::Nat) t = InertialFrame {objects :: t, frame :: ReferenceFrame p q DefaultField}
-instance Functor (InertialFrame p q) where
+data InertialFrame (p::Nat) (q::Nat) f t = InertialFrame {objects :: t, frame :: ReferenceFrame p q f}
+instance Functor (InertialFrame p q f) where
     fmap func (InertialFrame objs frame) = InertialFrame (func objs) frame
 
-{-instance (SingI p, SingI q) => Applicative (InertialFrame p q) where
-    pure a = InertialFrame a frame where 
-        frame = ReferenceFrame (basisVectors :: [Multivector p q DefaultField])
+instance (SingI p, SingI q) => Applicative (InertialFrame p q f) where
+    pure a = InertialFrame a GlobalAbsoluteFrame where 
     (<*>) (InertialFrame func frame1) (InertialFrame objs frame2) = if frame1==frame2 
                                                                     then InertialFrame (func objs) frame1 
                                                                     else error nonEqualFrames
 
 
-instance (SingI p, SingI q) => Monad (InertialFrame p q) where
+{-instance (SingI p, SingI q) => Monad (InertialFrame p q) where
     return = pure
     (>>=) (ReferenceFrame
 

@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
-{-# LANGUAGE TypeOperators, TypeFamilies,CPP #-}
-module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension) where
+{-# LANGUAGE TypeOperators, TypeFamilies,CPP, ConstraintKinds, RankNTypes, DataKinds #-}
+module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension, DefaultField, AllowableCliffordType) where
 import Numeric.Natural
 import Prelude hiding (head,tail, null)
 import Data.MemoTrie
@@ -10,6 +10,7 @@ import Data.Bits
 import Test.QuickCheck
 import Data.Word
 import GHC.TypeLits
+import Algebra.Field
 import qualified Debug.Trace as DebugTrace
 #ifdef DEBUG
 myTrace = DebugTrace.trace
@@ -17,6 +18,8 @@ myTrace = DebugTrace.trace
 myTrace _ x = x
 #endif
 
+
+type AllowableCliffordType p q f = forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q)
 type DefaultField = Double
 
 instance HasTrie Natural where

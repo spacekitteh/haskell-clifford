@@ -1,9 +1,9 @@
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, RankNTypes, KindSignatures, DataKinds, GADTs, FlexibleInstances, UndecidableInstances, InstanceSigs, MultiParamTypeClasses, PolyKinds, ConstraintKinds, UnicodeSyntax #-}
+{-# LANGUAGE NoImplicitPrelude, RankNTypes, KindSignatures, DataKinds, GADTs, FlexibleInstances, UndecidableInstances, InstanceSigs, MultiParamTypeClasses, PolyKinds, ConstraintKinds, UnicodeSyntax, StandaloneDeriving #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 module Numeric.Clifford.LinearOperators where
 import qualified NumericPrelude as NP ((.), id)
-import NumericPrelude hiding ((.), id, (!!), zipWith, map, length)
+import NumericPrelude hiding ((.), id, (!!), zipWith, map, length, zipWith3, and)
 import Numeric.Clifford.Multivector
 import Algebra.Algebraic
 import Algebra.Field
@@ -21,6 +21,7 @@ import Control.Lens.Operators
 import Data.Semigroupoid
 import Numeric.Natural
 import Data.Word
+import Algebra.Additive
 import Numeric.Clifford.Internal
 import qualified Numeric.Clifford.Blade
 \end{code}
@@ -40,6 +41,14 @@ getFuncFromOperator (LinearOperator op) = op
 type LinearOperator p q f = LinearOperator' p q f f
 type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> LinearOperator p q f
 
+instance (Show g, f ~ g) => Show (LinearOperator' p q f g) where
+    show = show . getMatrixElementsFromOperator
+
+instance (Algebra.Field.C f, Algebra.Field.C g, Ord f,  Ord g, SingI p, SingI q) => Eq (LinearOperator' p q f g) where
+   a == b = and (map (\ e → (f1 e) == (f2 e)) basisVectors) where
+           f1 = getFuncFromOperator a
+           f2 = getFuncFromOperator b
+
 instance Category (LinearOperator' p q) where
     id = LinearOperator' NP.id
     (.) (LinearOperator' a) (LinearOperator' b)  = LinearOperator' (a NP.. b)
@@ -49,7 +58,27 @@ instance (Algebra.Field.C f, Ord f,Algebra.Field.C g, Ord g, SingI p, SingI q, f
     mempty = id
     mappend = (.)
 
+data EuclideanMove p q f where
+    EuclideanMove :: ∀ (p::Nat) (q::Nat) f.  (Algebra.Field.C f, Ord f, SingI p, SingI q) => { _rotation :: Multivector p q f, _translation :: Multivector p q f} -> EuclideanMove p q f
 
+deriving instance Eq(EuclideanMove p q f)
+deriving instance (Show f) => Show (EuclideanMove p q f)
+
+applyEuclideanMove (EuclideanMove r a) x = (rotate r x) + a
+
+
+
+
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Monoid (EuclideanMove p q f) where
+    mempty = EuclideanMove one zero
+    mappend (EuclideanMove s b) (EuclideanMove r a) = EuclideanMove rot trans where
+          rot = r*s
+          trans = (rotate s a) + b
+
+{-instance ∀ a b (p::Nat) (q::Nat).(Algebra.Field.C a, SingI p, SingI q, Ord a, Algebra.Field.C b, Ord b) => Category (AffineOperator' p q) where
+    id:: (Algebra.Field.C c) => AffineOperator' p q c c
+    id = AffineOperator id zero
+    (.) = undefined -}
 
 {-
 --GHC 7.8: The Control.Category module now has the PolyKinds extension enabled, meaning that instances of Category no longer need be of kind * -> * -> *.
@@ -68,7 +97,7 @@ instance forall (p::Nat) (q::Nat) . Category (Operator p q) where
 -}
 
 getMatrixElementsFromOperator :: LinearOperator' p q f' f'-> [[f']]
-getMatrixElementsFromOperator operator = error "Not implemented yet!" where
+getMatrixElementsFromOperator operator = error "Numeric.Clifford.LinearOperator.getMatrixElementsFromOperator not implemented yet!" where
     f = getFuncFromOperator operator
     
    

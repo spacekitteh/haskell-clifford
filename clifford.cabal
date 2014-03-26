@@ -57,7 +57,7 @@ library
   -- other-modules:       
   
   -- LANGUAGE extensions used by modules in this package.
-  other-extensions:    NoImplicitPrelude, ScopedTypeVariables, GADTs, DataKinds,KindSignatures,UnicodeSyntax,FlexibleContexts, RankNTypes,TemplateHaskell,NoMonomorphismRestriction,MultiParamTypeClasses,FlexibleInstances, TypeOperators
+  other-extensions:    NoImplicitPrelude, ScopedTypeVariables, GADTs, DataKinds,KindSignatures,UnicodeSyntax,FlexibleContexts, RankNTypes,TemplateHaskell,NoMonomorphismRestriction,MultiParamTypeClasses,FlexibleInstances, TypeOperators, UnicodeSyntax, ConstraintKinds
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.6 && <4.9, numeric-prelude >= 0.4.0.1 && < 0.5.0, permutation >= 0.4.1 && < 0.5, 
                        data-ordlist >= 0.4.5 && < 0.5,  converge >= 0.1.0.1 && < 0.2, lens >= 4.0.3 && < 4.1, 
@@ -86,5 +86,5 @@ benchmark basic-ops
   main-is: benchmarks.hs
   build-depends: base, clifford, criterion, numeric-prelude, stream-fusion
   -- -optlo-O3
-  ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3 -rtsopts 
+  ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3 
   default-language: Haskell2010
