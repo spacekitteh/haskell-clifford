@@ -9,12 +9,16 @@ import Control.Arrow
 import Data.Bits
 import Test.QuickCheck
 import Data.Word
+import GHC.TypeLits
 import qualified Debug.Trace as DebugTrace
 #ifdef DEBUG
 myTrace = DebugTrace.trace
 #else
 myTrace _ x = x
 #endif
+
+type DefaultField = Double
+
 instance HasTrie Natural where
     newtype Natural :->: a = NaturalTrie ((Bool,[Bool]) :->: a)
     trie f = NaturalTrie (trie (f . unbitsZ)) 

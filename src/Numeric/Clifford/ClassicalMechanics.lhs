@@ -19,12 +19,10 @@ This is the classical mechanics portion of the library.
 {-# LANGUAGE FlexibleInstances, TypeOperators #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
 \end{code}
 %if False
 \begin{code}
-{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
--- OPTIONS_GHC -Odph -fvectorise -package dph-lifted-vseg 
---  LANGUAGE ParallelArrays
 \end{code}
 %endif
 
@@ -56,8 +54,12 @@ import Control.Exception (assert)
 import Data.Maybe
 import Data.DeriveTH
 import Data.Word
-import Debug.Trace
---trace _ a = a
+import Numeric.Clifford.Internal
+import Control.Applicative
+
+type DefaultField = Double
+nonEqualFrames = "Non-equal reference frames! Insert code here to translate between them! :) Should really make reference frames as types and then have type families to convert between them :v :v :v"
+
 
 data EnergyMethod (p::Nat) (q::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem p q f -> Multivector p q f], _dps :: [DynamicSystem p q f -> Multivector p q f]}
 
@@ -80,14 +82,39 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame (p::Nat) (q::Nat) t = ReferenceFrame {basisFrame :: [Multivector p q t]}
-psuedoScalar' :: forall f (p::Nat) (q::Nat). (Ord f, Algebra.Field.C f, SingI p, SingI q) => ReferenceFrame p q f -> Multivector p q f
-psuedoScalar'  = multiplyList . basisFrame
+data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {originRelToParent:: Multivector p q t, rotationRelToParent :: Multivector p q t, parent :: ReferenceFrame p q t}
+                                        |GlobalAbsoluteFrame deriving (Eq, Show)
+
+
+getRigidDisplacementRelToInertial ::(Algebra.Field.C t, SingI p, SingI q, Ord t) =>  ReferenceFrame p q t -> Multivector p q t
+getRigidDisplacementRelToInertial GlobalAbsoluteFrame = one
+getRigidDisplacementRelToInertial (RelativeFrame origin rotation mother) = undefined
+
+data InertialFrame (p::Nat) (q::Nat) t = InertialFrame {objects :: t, frame :: ReferenceFrame p q DefaultField}
+instance Functor (InertialFrame p q) where
+    fmap func (InertialFrame objs frame) = InertialFrame (func objs) frame
+
+{-instance (SingI p, SingI q) => Applicative (InertialFrame p q) where
+    pure a = InertialFrame a frame where 
+        frame = ReferenceFrame (basisVectors :: [Multivector p q DefaultField])
+    (<*>) (InertialFrame func frame1) (InertialFrame objs frame2) = if frame1==frame2 
+                                                                    then InertialFrame (func objs) frame1 
+                                                                    else error nonEqualFrames
+
+
+instance (SingI p, SingI q) => Monad (InertialFrame p q) where
+    return = pure
+    (>>=) (ReferenceFrame
+
+-}
+a `cross` b = (negate psuedoScalar) * (a ∧ b)
 
 
 
-a `cross` b = (negate $ one)`e`[0,1,2] * (a ∧ b)
 data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {r :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
+
+
+
 
 
 data RigidBody (p::Nat) (q::Nat) f where
@@ -105,8 +132,8 @@ data RigidBody (p::Nat) (q::Nat) f where
 5. figure a way to take exterior product of 1 forms at a type level so i can just go like: omega = df1 ^ df2 ^ df ; omega a b c
 -}
 
-type Vector3 f =  Multivector 3 0 f
-type STVector f = Multivector 3 1 f
+
+
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}

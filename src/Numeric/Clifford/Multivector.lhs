@@ -23,14 +23,9 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, KindSignatures, DataKinds #-}
 {-# LANGUAGE TemplateHaskell, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
+{-# OPTIONS_HADDOCK show-extensions #-}
 \end{code}
-%if False
-\begin{code}
-{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
--- OPTIONS_GHC -Odph -fvectorise -package dph-lifted-vseg 
---  LANGUAGE ParallelArrays
-\end{code}
-%endif
+
 Clifford algebras are a module over a ring. They also support all the usual transcendental functions.
 \begin{code}
 module Numeric.Clifford.Multivector where
@@ -86,7 +81,9 @@ A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
 data Multivector (p::Nat) (q::Nat) f where
-    BladeSum :: forall (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f,SingI p, SingI q) => { _terms :: [Blade p q f]} -> Multivector p q f
+    BladeSum :: ∀ (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f,SingI p, SingI q) => { _terms :: [Blade p q f]} → Multivector p q f
+    Spinor :: ∀ (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => {alpha :: f, beta :: [Blade p q f]} → Multivector p q f
+
 
 type STVector = Multivector 3 1 Double
 type E3Vector = Multivector 3 0 Double

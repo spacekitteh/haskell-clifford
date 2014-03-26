@@ -63,6 +63,7 @@ The first problem: How to represent basis blades. One way to do it is via genera
 \texttt{bScale} is the amplitude of the blade. \texttt{bIndices} are the indices for the basis. 
 \begin{code}
 
+
 data Blade (p :: Nat) (q :: Nat) f where
     Blade :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, SingI p, SingI q) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
 
@@ -138,7 +139,7 @@ However, the plain data constructor should never be used, for it doesn't order t
 {-#INLINE bladeNormalForm#-}
 {-#SPECIALISE INLINE bladeNormalForm::E3Blade -> E3Blade #-}
 {-#SPECIALISE INLINE bladeNormalForm :: STBlade -> STBlade #-}
-bladeNormalForm :: forall (p::Nat) (q::Nat) f.  Blade p q f -> Blade p q f
+bladeNormalForm :: ∀ (p::Nat) (q::Nat) f.  Blade p q f -> Blade p q f
 bladeNormalForm (Blade scale indices)  = result 
         where
              result = if (any (\i -> (GHC.Real.toInteger i) >= d) indices) then zeroBlade else Blade scale' newIndices
