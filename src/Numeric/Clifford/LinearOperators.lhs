@@ -45,7 +45,7 @@ instance (Show g, f ~ g) => Show (LinearOperator' p q f g) where
     show = show . getMatrixElementsFromOperator
 
 instance (Algebra.Field.C f, Algebra.Field.C g, Ord f,  Ord g, SingI p, SingI q) => Eq (LinearOperator' p q f g) where
-   a == b = and (map (\ e → (f1 e) == (f2 e)) basisVectors) where
+    a == b = and (map (\ e → (f1 e) == (f2 e)) basisVectors) where
            f1 = getFuncFromOperator a
            f2 = getFuncFromOperator b
 
@@ -109,10 +109,11 @@ createFunctionalFromElements elements = (\x -> f*x) where
     column k = let transposed = transpose elements in transposed !! k   
     elementsForK k =sumList $   zipWith (scaleRight) basisVectors (column k) 
     
-createLinearOperatorFromElements :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [[f]] -> LinearOperator p q f
+createLinearOperatorFromElements :: ∀ (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [[f]] -> LinearOperator p q f
 createLinearOperatorFromElements  = LinearOperator .  createFunctionalFromElements
 
 
+reflect :: (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> Multivector p q f -> Multivector p q f
 reflect u x = (-u)*x*recip u
 
 makeReflectionOperator ::LinearOperatorCreator p q f

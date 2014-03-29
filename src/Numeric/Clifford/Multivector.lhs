@@ -21,7 +21,7 @@ Let us  begin. We are going to use the Numeric Prelude because it is (shockingly
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs#-}
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, KindSignatures, DataKinds #-}
-{-# LANGUAGE TemplateHaskell, TypeOperators, DeriveFunctor #-}
+{-# LANGUAGE TemplateHaskell, TypeOperators, DeriveFunctor, DeriveFoldable, DeriveTraversable#-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 \end{code}
@@ -72,7 +72,8 @@ import Control.Lens.Lens
 import Data.Word
 import Control.Applicative ((<$>))
 import Numeric.Clifford.Internal
-
+import Data.Traversable
+import Data.Foldable (Foldable)
 
 \end{code}
 
@@ -82,7 +83,6 @@ A multivector is nothing but a linear combination of basis blades.
 \begin{code}
 data Multivector (p::Nat) (q::Nat) f where
     BladeSum :: ∀ (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f,SingI p, SingI q) => { _terms :: [Blade p q f]} → Multivector p q f
-    Spinor :: ∀ (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f, SingI p, SingI q) => {alpha :: f, beta :: [Blade p q f]} → Multivector p q f
 
 
 type STVector = Multivector 3 1 Double
@@ -95,11 +95,9 @@ instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f, Ord f) => Arbitrary 
        d = fromIntegral (p' + q')
 
 deriving instance Eq (Multivector p q f)
---instance  (SingI p, SingI q) => Functor (Multivector p q) where
---    fmap func x =  func x--((terms x) & scale %~ func)
 deriving instance Ord (Multivector p q f)
 deriving instance (Show f) => Show (Multivector p q f)
---deriving instance (Read f) => Read (Multivector p q f)
+
 
 signature :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Multivector p q f ->  (Natural,Natural)
 signature _ = (toNatural  ((fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural  ((fromIntegral $ fromSing (sing :: Sing q))::Word))
@@ -115,10 +113,14 @@ terms :: Lens' (Multivector p q f) [Blade p q f]
 terms = lens _terms (\bladeSum v -> bladeSum {_terms = v})
 
 {-# INLINE mvNormalForm #-}
-mvNormalForm (BladeSum terms) = BladeSum $ if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
+mvNormalForm (BladeSum terms) = BladeSum $ mvNormalForm' terms
+
+
+mvNormalForm' terms =  if null resultant then [scalarBlade Algebra.Additive.zero] else resultant  where
     resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $  map bladeNormalForm $ terms
+
 {-#INLINE mvTerms #-}
-mvTerms m = m^.terms
+mvTerms m = _terms m
 
 {-# INLINE addLikeTerms' #-}
 addLikeTerms' = sumLikeTerms . groupLikeTerms
@@ -130,7 +132,8 @@ groupLikeTerms = groupBy (\a b -> a^.indices == b^.indices)
 compareTol :: (Algebra.Algebraic.C f, Algebra.Absolute.C f, Ord f, SingI p, SingI q) => Multivector p q f -> Multivector p q f -> f -> Bool
 compareTol x y tol = ((NPN.abs $ magnitude (x-y) ) <= tol)
 
-{-#INLINE compensatedSum' #-}
+{-#NOINLINE compensatedSum' #-}
+{-#SPECIALISE compensatedSum' :: [Double] -> Double #-}
 compensatedSum' :: (Algebra.Additive.C f) => [f] -> f
 compensatedSum' xs = kahan zero zero xs where
     kahan s _ [] = s
@@ -150,20 +153,6 @@ compensatedRunningSum xs=shanksTransformation . map fst $ scanl kahanSum (zero,z
         t = s + y
         newc = (t - s) - y
             
---multiplyAdd a b c = a*b + c
---twoProduct a b = (x,y) where
---    x = a*b
---z    y = multiplyAdd a b (negate x)
-
---multiplyList [] = []
---multiplyList a@(x:[])=a
---multiplyList (a:b:xs) = loop a (b:xs) zero where
---  loop pm [] ei = pm+ei
---  loop pm1 (ai:remaining) eim1= loop pi remaining ei where
---      (pi, pii) = twoProduct pm1 ai
---      ei = multiplyAdd eim1 ai pii
-
-
 multiplyOutBlades :: (SingI p, SingI q, Algebra.Ring.C a) => [Blade p q a] -> [Blade p q a] -> [Blade p q a]
 multiplyOutBlades x y = [bladeMul l r | l <-x, r <- y]
 
@@ -176,11 +165,9 @@ multiplyList l = mvNormalForm $ BladeSum listOfBlades where
 multiplyList1 l = mvNormalForm $ BladeSum listOfBlades where
     expandedBlades a = foldl1 multiplyOutBlades a
     listOfBlades = expandedBlades $ map mvTerms l
---things to test: is 1. adding blades into a map based on indices 2. adding errything together 3. sort results quicker than
---                   1. sorting by indices 2. groupBy-ing on indices 3. adding the lists of identical indices
 
 {-#INLINE sumList #-}
-sumList xs = mvNormalForm $ BladeSum $ concat $ map mvTerms xs
+sumList xs = BladeSum $ mvNormalForm' $ concatMap _terms xs 
 
 {-#INLINE sumLikeTerms #-}
 {-#SPECIALISE INLINE sumLikeTerms :: [[STBlade]] -> [STBlade] #-}
@@ -257,7 +244,6 @@ instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Ring.C (Multive
 
     a ^ 2 = a * a
     a ^ 0 = one
-    a ^ 1 = a
     --a ^ n  --n < 0 = Clifford.recip $ a ^ (negate n)
     a ^ n  =  multiplyList (replicate (NPN.fromInteger n) a)
 
@@ -290,7 +276,6 @@ instance (Algebra.Absolute.C f, Algebra.Algebraic.C f, Ord f, SingI p, SingI q) 
     signum (BladeSum []) = scalar Algebra.Additive.zero
 
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Algebra.Module.C f (Multivector p q f) where
---    (*>) zero v = Algebra.Additive.zero
     {-#INLINE (*>) #-}
     {-#SPECIALISE INLINE (*>) :: Double -> STVector -> STVector #-}
     {-#SPECIALISE INLINE (*>) :: Double -> E3Vector -> E3Vector #-}
@@ -312,7 +297,7 @@ scaleLeft s v = BladeSum $ map (bladeScaleLeft s) $ mvTerms v
 scaleRight v s = BladeSum $ map (bladeScaleRight s) $ mvTerms v
 {-#INLINE divideRight #-}
 divideRight v s = scaleRight v (recip s)
---integratePoly c x = c : zipWith (Numeric.Clifford.Multivector./) x progression
+
 
 {-# INLINE converge#-}
 converge [] = error "converge: empty list"
@@ -536,23 +521,6 @@ normalised :: (Ord f, Algebra.Algebraic.C f, SingI p, SingI q) => Multivector p 
 normalised a = (a `scaleRight` ( recip $ mag),mag) where
     mag = magnitude a
 
-
-\end{code}
-
-Now let's do (slow as fuck probably) numerical integration! :D~! Since this is gonna be used for physical applications, it's we're gonna start off with a Hamiltonian structure and then a symplectic integrator.
-
-\begin{code}
-
-
-
-{- $(derive makeSerialize ''Blade)
-$(derive makeSerialize ''Multivector)
-$(derive makeData ''Blade)
-$(derive makeTypeable ''Blade)
-$(derive makeData ''Multivector)
-$(derive makeTypeable ''Multivector)-}
-
--- $(derive makeArbitrary ''Multivector)
 
 \end{code}
 \bibliographystyle{IEEEtran}

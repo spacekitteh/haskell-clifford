@@ -84,30 +84,37 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {euclideanMove :: EuclideanMove p q t, parent :: ReferenceFrame p q t}
+data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {frameName :: String, euclideanMove :: EuclideanMove p q t, velocityRelToParentFrame :: Multivector p q t, angularVelocityRelToParentFrame :: Multivector p q t, parent :: ReferenceFrame p q t}
                                         |GlobalAbsoluteFrame deriving (Eq, Show)
 
 
 getRigidDisplacementRelToInertial :: (Algebra.Field.C t, Ord t, SingI p, SingI q) =>  ReferenceFrame p q t -> EuclideanMove   p q t
 getRigidDisplacementRelToInertial GlobalAbsoluteFrame = mempty
-getRigidDisplacementRelToInertial (RelativeFrame displacement mother) = displacement <> (getRigidDisplacementRelToInertial mother)
+--getRigidDisplacementRelToInertial (RelativeFrame _ displacement mother) = displacement <> (getRigidDisplacementRelToInertial mother)
 
-data InertialFrame (p::Nat) (q::Nat) f t = InertialFrame {objects :: t, frame :: ReferenceFrame p q f}
+getFrameTransformation :: forall (p::Nat) (q::Nat) t . (Algebra.Field.C t, Ord t, SingI p, SingI q) =>  ReferenceFrame p q t -> ReferenceFrame p q t -> EuclideanMove p q t
+getFrameTransformation r' r = undefined
+
+{-data InertialFrame (p::Nat) (q::Nat) f t = InertialFrame {objects :: t, changeFrame :: t -> EuclideanMove p q f -> t, frame :: ReferenceFrame p q f}
+
+
 instance Functor (InertialFrame p q f) where
-    fmap func (InertialFrame objs frame) = InertialFrame (func objs) frame
+    fmap func (InertialFrame objs changeFrame frame) = InertialFrame (func objs) (changeFrame . func) frame
 
 instance (SingI p, SingI q) => Applicative (InertialFrame p q f) where
     pure a = InertialFrame a GlobalAbsoluteFrame where 
-    (<*>) (InertialFrame func frame1) (InertialFrame objs frame2) = if frame1==frame2 
+    (<*>) (InertialFrame func trans1 frame1) (InertialFrame objs trans2 frame2) = if (name frame1)==(name frame2)
                                                                     then InertialFrame (func objs) frame1 
-                                                                    else error nonEqualFrames
+                                                                    else InertialFrame (trans2 (func objs) (getFrameTransformation frame2 frame1)) trans2 frame1
 
 
-{-instance (SingI p, SingI q) => Monad (InertialFrame p q) where
+instance (SingI p, SingI q, Algebra.Field.C f, Ord f) => Monad (InertialFrame p q f) where
     return = pure
-    (>>=) (ReferenceFrame
-
+    (>>=) (InertialFrame objA changeFrameA frameA)  func = undefined where
+        (InertialFrame objB changeFrameB frameB) = func objA
+        
 -}
+
 a `cross` b = (negate psuedoScalar) * (a ∧ b)
 
 
@@ -119,12 +126,7 @@ data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {r :: Multivector p q t
 
 
 data RigidBody (p::Nat) (q::Nat) f where
- RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector p q f)) =>  {position :: PhysicalVector p q f,
-                              momentum :: PhysicalVector p q f,
-                              mass :: f,
-                              attitude :: PhysicalVector p q f,
-                              angularMomentum :: PhysicalVector p q f,
-                              inertia :: PhysicalVector p q f
+ RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector p q f)) =>  {bodyName::String, frame::ReferenceFrame p q f, mass :: f, inertia :: Multivector p q f, position :: Multivector p q f, attitude :: Multivector p q f, velocity :: Multivector p q f, angularVelocity :: Multivector p q f
                              } -> RigidBody p q f
 
 --makeLenses ''RigidBody doesn't actually work

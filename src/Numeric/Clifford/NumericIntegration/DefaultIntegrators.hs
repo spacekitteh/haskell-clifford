@@ -36,9 +36,9 @@ import qualified NumericPrelude.Numeric              as NPN
 import           Test.QuickCheck
 --trace _ a = a
 
-gaussLegendreFourthOrderTableau = ButcherTableau [[0.25::NPN.Double, 0.25 - (1.0 NPN./6)* sqrt 3], [0.25 + (1.0 NPN./ 6) * sqrt 3, 0.25]] [0.5, 0.5] [0.5 - (1.0 NPN./6)* sqrt 3, 0.5 + (1.0 NPN./ 6)* sqrt 3]
+gaussLegendreFourthOrderTableau = ButcherTableau [[0.25::NPN.Double, 0.25 - ((sqrt 3.0) NPN./6.0)],[0.25 + ((sqrt 3.0) NPN./ 6.0) , 0.25]] [0.5, 0.5] [0.5 - ((sqrt 3.0) NPN./6.0), 0.5 + ((sqrt 3.0) NPN./ 6.0)]
 gaussLegendreFourthOrder h f (t, state) = impl h f id id (t,state) where
-    impl= genericRKMethod gaussLegendreFourthOrderTableau []
+    impl= genericRKMethod gaussLegendreFourthOrderTableau [ConvergenceTolerance 1.0e-8]
 
 
 rk4ClassicalFromTableau h f (t,state) = impl h f id id (t, state) where

@@ -18,17 +18,7 @@ This is the numeric integration portion of the library.
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs, DataKinds, KindSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-\end{code}
-%if False
-\begin{code}
-{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
--- OPTIONS_GHC -Odph -fvectorise -package dph-lifted-vseg 
---  LANGUAGE ParallelArrays
-\end{code}
-%endif
-
-\begin{code}
+{-# LANGUAGE MultiParamTypeClasses, BangPatterns #-}
 
 module Numeric.Clifford.NumericIntegration where
 import Numeric.Clifford.Multivector as MV
@@ -57,6 +47,7 @@ import GHC.TypeLits
 import Numeric.Clifford.Internal
 import Data.DeriveTH
 
+import qualified Debug.Trace
 
 elementAdd = zipWith (+)
 elementScale = zipWith (*>) 
@@ -123,7 +114,7 @@ type ConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] ->
 type AdaptiveStepSizeFunction f state = f -> state -> f 
 
 data RKAttribute f state = Explicit
-                 | HamiltonianFunction
+                 | HamiltonianFunction {totalEnergy :: state -> f}
                  | AdaptiveStepSize {sigma :: AdaptiveStepSizeFunction f state}
                  | ConvergenceTolerance {epsilon :: f}
                  | ConvergenceFunction {converger :: ConvergerFunction f } 
@@ -172,7 +163,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                         Just (AdaptiveStepSize sigma) -> sigma
                         Nothing -> (\_ _ -> one)
 
-    {-#INLINE rkMethodImplicitFixedPoint#-}
+
 --    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double stateType #-}
 --    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double [E3Vector] #-}
 --    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 1 Double stateType #-}
@@ -188,11 +179,12 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
             adaptiveStepSizeFraction :: t
             adaptiveStepSizeFraction = stepSizeAdapter time state
             h' :: t
-            h' = adaptiveStepSizeFraction *  h * (c i)
+            h' = h * c i --adaptiveStepSizeFraction *  h * (c i)
             guessTime :: t
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector p q t] -> [Multivector p q t]
-            zkp1 i zk = map (h*>) (sumOfJs i zk) where
+            zkp1 i !zk = map (h*>) (sumOfJs i zk) where
+                
                 {-#INLINE sumOfJs#-}
                 sumOfJs :: Int -> [Multivector p q t] -> [Multivector p q t]
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
