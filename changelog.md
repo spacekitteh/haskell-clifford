@@ -1,4 +1,5 @@
 -*-change-log-*-
+	0.1.0.14 Added pendulum example
 	0.1.0.13 Adding ability to create linear operators from matrices; made linear operators a category and monoid
 	0.1.0.12 Adding type signatures to top level stuff
 	0.1.0.11 More inlining and specialisation

@@ -10,7 +10,7 @@ name:                clifford
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.13
+version:             0.1.0.14
 
 -- A short (one-line) description of the package.
 synopsis:            A Clifford algebra library
@@ -72,7 +72,7 @@ library
   
 
 executable pendulum
-  build-depends: base, clifford, numeric-prelude,gnuplot,stream-fusion, Chart, Chart-cairo, colour, lens, data-default-class
+  build-depends: base, clifford, numeric-prelude,stream-fusion, Chart, Chart-cairo, colour, lens, data-default-class
   other-extensions: NoImplicitPrelude
   main-is: Pendulum.hs
   hs-source-dirs: examples

@@ -18,7 +18,7 @@ This is the numeric integration portion of the library.
 {-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs, DataKinds, KindSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE MultiParamTypeClasses, BangPatterns #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Numeric.Clifford.NumericIntegration where
 import Numeric.Clifford.Multivector as MV
@@ -54,10 +54,6 @@ elementScale = zipWith (*>)
 a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
 
-
---rk4ClassicalTableau :: ButcherTableau NPN.Double
-rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
-implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
 
 
 
@@ -179,11 +175,11 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
             adaptiveStepSizeFraction :: t
             adaptiveStepSizeFraction = stepSizeAdapter time state
             h' :: t
-            h' = h * c i --adaptiveStepSizeFraction *  h * (c i)
+            h' = adaptiveStepSizeFraction *  h * (c i)
             guessTime :: t
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector p q t] -> [Multivector p q t]
-            zkp1 i !zk = map (h*>) (sumOfJs i zk) where
+            zkp1 i zk = map (h*>) (sumOfJs i zk) where
                 
                 {-#INLINE sumOfJs#-}
                 sumOfJs :: Int -> [Multivector p q t] -> [Multivector p q t]

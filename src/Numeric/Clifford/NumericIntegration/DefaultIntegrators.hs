@@ -1,4 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude, NoMonomorphismRestriction #-}
 module Numeric.Clifford.NumericIntegration.DefaultIntegrators where
 import           Algebra.Absolute
 import           Algebra.Additive                    hiding (elementAdd,
@@ -36,6 +36,12 @@ import qualified NumericPrelude.Numeric              as NPN
 import           Test.QuickCheck
 --trace _ a = a
 
+--rk4ClassicalTableau :: ButcherTableau NPN.Double
+rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
+implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
+
+
+
 gaussLegendreFourthOrderTableau = ButcherTableau [[0.25::NPN.Double, 0.25 - ((sqrt 3.0) NPN./6.0)],[0.25 + ((sqrt 3.0) NPN./ 6.0) , 0.25]] [0.5, 0.5] [0.5 - ((sqrt 3.0) NPN./6.0), 0.5 + ((sqrt 3.0) NPN./ 6.0)]
 gaussLegendreFourthOrder h f (t, state) = impl h f id id (t,state) where
     impl= genericRKMethod gaussLegendreFourthOrderTableau [ConvergenceTolerance 1.0e-8]
@@ -44,7 +50,7 @@ gaussLegendreFourthOrder h f (t, state) = impl h f id id (t,state) where
 rk4ClassicalFromTableau h f (t,state) = impl h f id id (t, state) where
     impl = genericRKMethod rk4ClassicalTableau []
 implicitEulerMethod h f (t, state) = impl h f id id (t, state) where
-    impl = genericRKMethod implicitEulerTableau []
+    impl = genericRKMethod implicitEulerTableau [ConvergenceTolerance 1.0e-8]
 
 lobattoIIIASecondOrderTableau = ButcherTableau [[0,0],[0.5::NPN.Double,0.5]] [0.5,0.5] [0,1]
 lobattoIIIASecondOrder h f (t, state) = impl h f id id  (t, state) where
