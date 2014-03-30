@@ -44,7 +44,7 @@ implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
 
 gaussLegendreFourthOrderTableau = ButcherTableau [[0.25::NPN.Double, 0.25 - ((sqrt 3.0) NPN./6.0)],[0.25 + ((sqrt 3.0) NPN./ 6.0) , 0.25]] [0.5, 0.5] [0.5 - ((sqrt 3.0) NPN./6.0), 0.5 + ((sqrt 3.0) NPN./ 6.0)]
 gaussLegendreFourthOrder h f (t, state) = impl h f id id (t,state) where
-    impl= genericRKMethod gaussLegendreFourthOrderTableau [ConvergenceTolerance 1.0e-8]
+    impl= genericRKMethod gaussLegendreFourthOrderTableau [ConvergenceTolerance 1.0e-9]
 
 
 rk4ClassicalFromTableau h f (t,state) = impl h f id id (t, state) where
@@ -77,4 +77,4 @@ rk4Classical state h f project unproject = project newState where
     k3 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' (map (`divideRight` two) k2)
     k4 = map (h*>) $ evalDerivatives . map (uncurry (+)) $ zip state' k3
 
-rk4ClassicalList state h f = rk4Classical state h f id id
+rk4ClassicalList  h f state = rk4Classical  h f id id state

@@ -159,7 +159,9 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                         Just (AdaptiveStepSize sigma) -> sigma
                         Nothing -> (\_ _ -> one)
 
-
+    (hamiltonian, hamiltonianExists) = case find isHamiltonianFunction attributes of
+                    Just (HamiltonianFunction hamil) -> (hamil,True)
+                    Nothing -> (const zero,False)
 --    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double stateType #-}
 --    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double [E3Vector] #-}
 --    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 1 Double stateType #-}
@@ -169,7 +171,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         (time + (stepSizeAdapter time state)*h*(c s), newState) where
         zi :: Int -> [Multivector p q t]
         zi i = (\out -> myTrace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
-                converger $ iterate (zkp1 i) initialGuess where
+                converger $ iterate (zkp1 i) initialGuess where --use fixed point iteration
             initialGuess :: [Multivector p q t]
             initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
             adaptiveStepSizeFraction :: t
@@ -179,15 +181,13 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
             guessTime :: t
             guessTime = time + h'
             zkp1 :: NPN.Int -> [Multivector p q t] -> [Multivector p q t]
-            zkp1 i zk = map (h*>) (sumOfJs i zk) where
-                
+            zkp1 i zk =  map (h*>) (sumOfJs i zk) where
                 {-#INLINE sumOfJs#-}
                 sumOfJs :: Int -> [Multivector p q t] -> [Multivector p q t]
                 sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
                     {-# INLINE scaledByAij #-}
                     scaledByAij :: [Multivector p q t] -> t -> [Multivector p q t]
                     scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
-
         state' = unproject state :: [Multivector p q t]
         newState :: stateType
         newState = project $ elementAdd state' (assert (not $  null dy) dy)

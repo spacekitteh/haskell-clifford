@@ -1,5 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude, NoMonomorphismRestriction, DataKinds #-}
-import NumericPrelude (Double, fst, snd, ($), (.), seq)
+import NumericPrelude (Double, fst, snd, ($), (.), seq, id)
 import Prelude (getLine, putStrLn)
 import Algebra.Transcendental
 import Data.List.Stream
@@ -18,14 +18,16 @@ import Data.Colour.Names
 import Data.Default.Class
 import Graphics.Rendering.Chart.Backend.Cairo
 
-m = scalar 3 :: E3Vector
+m = scalar 1 :: E3Vector
 l = scalar 20 :: E3Vector
 g = scalar 9.81 :: E3Vector
 
-hamil _ [p,theta] = [ (-m*g*l)* {-sin-}  theta, p / (m*l*l)] 
+pendulum _ [p,theta] = [ (-m*g*l)* sin  theta, p / (m*l*l)] 
 
-integrator = gaussLegendreFourthOrder 0.1 hamil --gaussLegendreFourthOrder 0.1 hamil
-
+integrator = gaussLegendreFourthOrder 0.1 pendulum --gaussLegendreFourthOrder 0.1 hamil
+hamiltonian [ p', theta'] = magnitude $ (p*p/ (2*m*l*l)) - m*g*l*cos theta where
+            p = scalar p'
+            theta = scalar theta'
 
 tenSeconds =   take 5001 $ iterate integrator (0,[one::E3Vector,one]) --[zero::E3Vector,one/10]) 
 
@@ -42,10 +44,14 @@ chart = toRenderable layout
                   $ plot_lines_values .~ [ ( map (\(t,_,theta) -> (t,theta)) plottableFormat )]
                   $ plot_lines_title .~ "angle"
                   $ def
-
+    energy = plot_lines_values .~ [ ( map (\(t,p,theta) -> (t,hamiltonian [p,theta])) plottableFormat )]
+                          $ plot_lines_style  . line_color .~ opaque pink
+                          $ plot_lines_title .~ "energy"
+                          $ def
     layout = layout_title .~ "Pendulum"
            $ layout_plots .~ [toPlot momentum,
-                              toPlot angle]
+                              toPlot angle,
+                              toPlot energy]
            $ def
 
 main = renderableToFile def  chart "pendulum.png"
