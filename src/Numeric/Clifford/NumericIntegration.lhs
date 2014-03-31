@@ -54,13 +54,6 @@ elementScale = zipWith (*>)
 a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
 
-
-
-
-sumVector = sumList . V.toList 
-
---systemRootSolver :: [Multivector f] -> [Multivector f] -> ratio -> [Multivector f] -> [Multivector f] -> [Multivector f]
-
 --This will stop as soon as one of the elements converges. This is bad. Need to make it skip convergent ones and focus on the remainig.
 systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
     update (xm1,jm1) xm2 | zero `elem` dx =  [(xm1,undefined)]
@@ -76,26 +69,42 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 
 --TODO: implement Broyden-Fletcher-Goldfarb-Shanno method
 
-
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
-
 showOutput name x = myTrace ("output of " ++ name ++" is " ++ show x) x
+{-#INLINE sumListOfLists #-}
 
-convergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
+sumListOfLists = map sumList . transpose 
+
+stateConvergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
                    => f ->  [[Multivector p q f]] -> [Multivector p q f]
-convergeTolLists t [] = error "converge: empty list"
-convergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
+stateConvergeTolLists t [] = error "converge: empty list"
+stateConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
     where
       empty = error "converge: error in impl"
       check (a:b:c:_)
           | (myTrace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
-          | ((showOutput ("convergence check with tolerance " ++ show t) $ 
-              magnitude (sumList $ (zipWith (\x y -> NPN.abs (x-y)) b c))) <= t) = showOutput ("convergence with tolerance "++ show t )$ Just c
+          | (compensatedSum' (map magnitude diffBetweenElements)) <= t = showOutput ("state convergence with tolerance "++ show t )$ Just c where
+            diffBetweenElements = zipWith (\x y -> NPN.abs (x-y)) b c
       check _ = Nothing
+guessConvergeTolLists :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
+                   => f ->  [[[Multivector p q f]]] -> [[Multivector p q f]]
+guessConvergeTolLists _ [] = error "converge: empty list"
+guessConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
+    where
+      empty = error "converge: error in impl"
+      check :: [[[Multivector p q f]]] -> Maybe [[Multivector p q f]]
+      check (a:b:c:_)
+          | (myTrace ("Converging at " ++ show a) a) == b = Just b
+          | a == c = Just c
+          | totalDifference <= t = showOutput ("guess convergence with tolerance "++ show t )$ Just c where
 
+            totalDifference = compensatedSum' $ zipWith (\x y -> absDiffBetweenLists x y) b c
+            absDiffBetweenLists :: [Multivector p q f] -> [Multivector p q f] -> f
+            absDiffBetweenLists x' y' = compensatedSum' $ map magnitude $ zipWith (\x y -> NPN.abs (x-y)) x' y'
+      check _ = Nothing
 type RKStepper (p::Nat) (q::Nat) t stateType = 
     (Ord t, Show t, Algebra.Module.C t (Multivector p q t), Algebra.Field.C t) => 
      t -> (t -> stateType -> stateType) -> 
@@ -105,17 +114,19 @@ type RKStepper (p::Nat) (q::Nat) t stateType =
 data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
 makeLenses ''ButcherTableau
 
-
-type ConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
+type StateConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
+type GuessConvergerFunction f = forall (p::Nat) (q::Nat) f . [[[Multivector p q f]]] -> [[Multivector p q f]]
 type AdaptiveStepSizeFunction f state = f -> state -> f 
 
 data RKAttribute f state = Explicit
                  | HamiltonianFunction {totalEnergy :: state -> f}
                  | AdaptiveStepSize {sigma :: AdaptiveStepSizeFunction f state}
                  | ConvergenceTolerance {epsilon :: f}
-                 | ConvergenceFunction {converger :: ConvergerFunction f } 
+                 | StateConvergenceFunction {stateConverger :: StateConvergerFunction f } 
+                 | GuessConvergenceFunction {guessConverger :: GuessConvergerFunction f }
                  | RootSolver 
                  | UseAutomaticDifferentiationForRootSolver
+                 | Seperable
                  | StartingGuessMethod 
 
 
@@ -136,24 +147,24 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         l = _tableauC tableau
     a :: Int -> [t]
     {-#INLINE a#-}
-    a n = (l !! (n-1)) & filter (/= zero) where
+    a n = (l !! (n-1)) where
         l = _tableauA tableau
     b :: Int -> t
     b i = l !! (i - 1) where
         l = _tableauB tableau
-    
-    {-#INLINE sumListOfLists #-}
---    {-#SPECIALISE INLINE sumListOfLists :: [[STVector]]->[STVector]#-}
---    {-#SPECIALISE INLINE sumListOfLists :: [[Vector]]->[E3Vector]#-}
-    sumListOfLists :: [[Multivector p q t]] -> [Multivector p q t]
-    sumListOfLists = map sumList . transpose 
+    b' = _tableauB tableau
 
-    converger :: [[Multivector p q t]] -> [Multivector p q t]
-    converger = case  find (\x -> isConvergenceTolerance x || isConvergenceFunction x) attributes of
-                  Just (ConvergenceFunction conv) -> conv
-                  Just (ConvergenceTolerance tol) -> convergeTolLists (myTrace ("Convergence tolerance set to " ++ show tol)tol)
+    --TODO: Use hamiltonian to tell it to only stop converging once it is within an acceptable range of energy!!! Otherwise the tolerances will lead to an exponential decay/growth due to approaching from below/above! 
+    stateConverger :: [[Multivector p q t]] -> [Multivector p q t]
+    stateConverger = case  find (\x -> isConvergenceTolerance x || isStateConvergenceFunction x) attributes of
+                  Just (StateConvergenceFunction conv) -> conv
+                  Just (ConvergenceTolerance tol) -> stateConvergeTolLists (myTrace ("Convergence tolerance set to " ++ show tol)tol)
                   Nothing -> myTrace "No convergence tolerance specified, defaulting to equality" convergeList 
-
+    guessConverger :: [[[Multivector p q t]]] -> [[Multivector p q t]]
+    guessConverger = case  find (\x -> isConvergenceTolerance x || isGuessConvergenceFunction x) attributes of
+                  Just (GuessConvergenceFunction conv) -> conv
+                  Just (ConvergenceTolerance tol) -> guessConvergeTolLists (myTrace ("Convergence tolerance set to " ++ show tol)tol)
+                  Nothing -> myTrace "No convergence tolerance specified, defaulting to equality" converge 
     stepSizeAdapter :: AdaptiveStepSizeFunction t stateType
     stepSizeAdapter = case find isAdaptiveStepSize attributes of
                         Just (AdaptiveStepSize sigma) -> sigma
@@ -162,53 +173,31 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     (hamiltonian, hamiltonianExists) = case find isHamiltonianFunction attributes of
                     Just (HamiltonianFunction hamil) -> (hamil,True)
                     Nothing -> (const zero,False)
---    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double stateType #-}
---    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 0 Double [E3Vector] #-}
---    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 1 Double stateType #-}
---    {-#SPECIALISE rkMethodImplicitFixedPoint :: RKStepper 3 1 Double [STVector] #-}        
+    
     rkMethodImplicitFixedPoint :: RKStepper p q t stateType
     rkMethodImplicitFixedPoint h f project unproject (time, state) =
-        (time + (stepSizeAdapter time state)*h*(c s), newState) where
-        zi :: Int -> [Multivector p q t]
-        zi i = (\out -> myTrace ("initialGuess is " ++ show initialGuess++" whereas the final one is " ++ show out) out) $
-                converger $ iterate (zkp1 i) initialGuess where --use fixed point iteration
-            initialGuess :: [Multivector p q t]
-            initialGuess = if i == 1 || null (zi (i-1)) then map (h'*>) $ unproject $ f guessTime state else zi (i-1)
-            adaptiveStepSizeFraction :: t
-            adaptiveStepSizeFraction = stepSizeAdapter time state
-            h' :: t
-            h' = adaptiveStepSizeFraction *  h * (c i)
-            guessTime :: t
-            guessTime = time + h'
-            zkp1 :: NPN.Int -> [Multivector p q t] -> [Multivector p q t]
-            zkp1 i zk =  map (h*>) (sumOfJs i zk) where
-                {-#INLINE sumOfJs#-}
-                sumOfJs :: Int -> [Multivector p q t] -> [Multivector p q t]
-                sumOfJs i zk =  sumListOfLists $ map (scaledByAij zk) (a i) where 
-                    {-# INLINE scaledByAij #-}
-                    scaledByAij :: [Multivector p q t] -> t -> [Multivector p q t]
-                    scaledByAij guess a = map (a*>) $ evalDerivatives guessTime $ elementAdd state' guess
-        state' = unproject state :: [Multivector p q t]
-        newState :: stateType
-        newState = project $ elementAdd state' (assert (not $  null dy) dy)
-        dy = sumListOfLists  [map ((b i) *>) (zi i) | i <- [1..s]] :: [Multivector p q t]
-        {-#INLINE evalDerivatives #-}
+      (time + adaptiveStepSizeFraction*(c s), newState) where
+        adaptiveStepSizeFraction = (stepSizeAdapter time state)*h
+        newState = project $ elementAdd state' dy'
+        state' = unproject state 
+        lengthOfState = length state'
+
+        dy' = sumListOfLists  $ zipWith (\b zi -> map (b *>) zi) b' z
+        initialGuess = replicate s (unproject $ f time state )
+        z = guessConverger $ iterate systemOfZiGuesses initialGuess
+        systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
+        systemOfZiGuesses zk = [zi_plus1 i | i <- [1..s]] where
+            atYn = map (elementAdd state') zk
+            zi_plus1 i = map ((adaptiveStepSizeFraction * (c i))*>) $ sumListOfLists scaledByAi where
+                h' = adaptiveStepSizeFraction * (c i)
+                guessTime = time + h'
+                scaledByAi = zipWith (\a evalled-> map (a*>) evalled) (a i) $ map (evalDerivatives guessTime) atYn
         evalDerivatives :: t -> [Multivector p q t] -> [Multivector p q t]
+        --basically a wrapper for f
         evalDerivatives time stateAtTime= unproject $ (f time) $ project stateAtTime
-
-
 \end{code}
 
-
-
-
-
-
 Look at creating an exponential integrator: https://en.wikipedia.org/wiki/Exponential_integrators
-
-
-
-
 
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}

@@ -20,16 +20,18 @@ import Graphics.Rendering.Chart.Backend.Cairo
 
 m = scalar 1 :: E3Vector
 l = scalar 20 :: E3Vector
-g = scalar 9.81 :: E3Vector
+g = scalar 9.801 :: E3Vector
 
 pendulum _ [p,theta] = [ (-m*g*l)* sin  theta, p / (m*l*l)] 
 
-integrator = gaussLegendreFourthOrder 0.1 pendulum --gaussLegendreFourthOrder 0.1 hamil
+integrator = gaussLegendreFourthOrder 0.01 pendulum 
 hamiltonian [ p', theta'] = magnitude $ (p*p/ (2*m*l*l)) - m*g*l*cos theta where
-            p = scalar p'
-            theta = scalar theta'
+              p = scalar p'
+              theta = scalar theta'
 
-tenSeconds =   take 5001 $ iterate integrator (0,[one::E3Vector,one]) --[zero::E3Vector,one/10]) 
+
+--pendulum _ [theta,thetadot] = [one,(-g/l) * sin theta]
+tenSeconds =   take 50001 $ iterate integrator (0,[one::E3Vector,one]) --[zero::E3Vector,one/10]) 
 
 plottableFormat = map ((\ (t, ([BladeSum [Blade a []],BladeSum [Blade b []]])) -> (t,a,b) ) ) tenSeconds
 
