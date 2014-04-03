@@ -1,5 +1,5 @@
-{-# LANGUAGE NoImplicitPrelude, NoMonomorphismRestriction, DataKinds #-}
-import NumericPrelude (Double, fst, snd, ($), (.), seq, id)
+{-# LANGUAGE NoImplicitPrelude, NoMonomorphismRestriction, DataKinds, FlexibleInstances #-}
+import NumericPrelude (Double, fst, snd, ($), (.), seq, id, show )
 import Prelude (getLine, putStrLn)
 import Algebra.Transcendental
 import Data.List.Stream
@@ -7,7 +7,6 @@ import Numeric.Clifford.Multivector
 import Algebra.Ring 
 import Algebra.Additive 
 import Algebra.Field
-import Numeric.Clifford.NumericIntegration
 import Numeric.Clifford.NumericIntegration.DefaultIntegrators
 import Numeric.Clifford.Blade
 
@@ -17,23 +16,30 @@ import Data.Colour
 import Data.Colour.Names
 import Data.Default.Class
 import Graphics.Rendering.Chart.Backend.Cairo
+import Numeric.Compensated
+import Control.DeepSeq
+import MathObj.Wrapper.Haskell98
+import Debug.Trace
+comp a = Cons (fadd a 0.0 compensated)
 
-m = scalar 1 :: E3Vector
-l = scalar 20 :: E3Vector
-g = scalar 9.801 :: E3Vector
+m = scalar 1 :: E3VectorComp
+l = scalar 2 :: E3VectorComp
+g = scalar 9.801 :: E3VectorComp
+showOutput name x = Debug.Trace.trace ("output of " ++ name ++" is " ++ show x) x
+pendulum t [p,theta] =   [ (-m*g*l)* sin theta, p / (m*l*l)] 
 
-pendulum _ [p,theta] = [ (-m*g*l)* sin  theta, p / (m*l*l)] 
-
-integrator = gaussLegendreFourthOrder 0.01 pendulum 
-hamiltonian [ p', theta'] = magnitude $ (p*p/ (2*m*l*l)) - m*g*l*cos theta where
-              p = scalar p'
-              theta = scalar theta'
+integrator = gaussLegendreFourthOrderComp (comp 0.1)  pendulum 
+hamiltonian [ p', theta'] = extract $ magnitude $ (p*p/ (2*m*l*l)) - m*g*l* cos theta where
+              p = scalar $ comp p'
+              theta = scalar $ comp theta'
 
 
 --pendulum _ [theta,thetadot] = [one,(-g/l) * sin theta]
-tenSeconds =   take 50001 $ iterate integrator (0,[one::E3Vector,one]) --[zero::E3Vector,one/10]) 
+tenSeconds =   take 5001 $ Debug.Trace.trace ("Value of m is " ++ show m) iterate integrator (0,[zero::E3VectorComp,showOutput "theta initial" $ scalar $ comp (0.3)]) --[zero::E3Vector,one/10]) 
 
-plottableFormat = map ((\ (t, ([BladeSum [Blade a []],BladeSum [Blade b []]])) -> (t,a,b) ) ) tenSeconds
+extract  = uncompensated . decons
+plottableFormat :: [(Double,Double,Double)]
+plottableFormat = map ((\ (t, ([BladeSum [Blade a []],BladeSum [Blade b []]])) -> (extract t,extract a,extract b) ) ) tenSeconds
 
 chart = toRenderable layout
   where

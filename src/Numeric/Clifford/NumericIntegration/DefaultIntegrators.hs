@@ -34,7 +34,7 @@ import           NumericPrelude                      hiding (any, concat,
 import           NumericPrelude.Numeric              (sum)
 import qualified NumericPrelude.Numeric              as NPN
 import           Test.QuickCheck
---trace _ a = a
+import Numeric.Clifford.Internal
 
 --rk4ClassicalTableau :: ButcherTableau NPN.Double
 rk4ClassicalTableau = ButcherTableau [[0,0,0,0],[0.5,0,0,0],[0,0.5,0,0],[0,0,1,0]] [1.0 NPN./6,1.0 NPN./3, 1.0 NPN./3, 1.0 NPN./6] [0, 0.5, 0.5, 1]
@@ -42,9 +42,15 @@ implicitEulerTableau = ButcherTableau [[1.0::NPN.Double]] [1] [1]
 
 
 
-gaussLegendreFourthOrderTableau = ButcherTableau [[0.25::NPN.Double, 0.25 - ((sqrt 3.0) NPN./6.0)],[0.25 + ((sqrt 3.0) NPN./ 6.0) , 0.25]] [0.5, 0.5] [0.5 - ((sqrt 3.0) NPN./6.0), 0.5 + ((sqrt 3.0) NPN./ 6.0)]
+gaussLegendreFourthOrderTableau = ButcherTableau [[0.25::NPN.Double, 0.25 - ((sqrt 3.0) /6.0)],[0.25 + ((sqrt 3.0) / 6.0) , 0.25]] [0.5, 0.5] [0.5 - ((sqrt 3.0) /6.0),  0.5 + ((sqrt 3.0) / 6.0)]
 gaussLegendreFourthOrder h f (t, state) = impl h f id id (t,state) where
-    impl= genericRKMethod gaussLegendreFourthOrderTableau [ConvergenceTolerance 5.0e-8]
+    impl= genericRKMethod gaussLegendreFourthOrderTableau [ConvergenceTolerance 5.0e-15]
+
+
+gaussLegendreFourthOrderTableauComp = ButcherTableau [[comp (0.25::Double), comp 0.25 - ((sqrt 3.0) /6.0)],[comp 0.25 + ((sqrt 3.0)/ 6.0) , comp 0.25]] [comp 0.5, comp 0.5] [comp 0.5 - ((sqrt 3.0) /6.0),comp  0.5 + ((sqrt 3.0) / 6.0)]
+gaussLegendreFourthOrderComp h f (t, state) = impl h f id id (t,state) where
+    impl= genericRKMethod gaussLegendreFourthOrderTableauComp [ConvergenceTolerance (comp 5.0e-13) ]
+
 
 
 rk4ClassicalFromTableau h f (t,state) = impl h f id id (t, state) where
@@ -61,6 +67,12 @@ lobattoIIIAFourthOrderWithTol h f (t, state) = impl h f id id (t, state) where
 lobattoIIIAFourthOrderTableau = ButcherTableau [[0,0,0],[((5 NPN./24)::NPN.Double),1 NPN./3,-1 NPN./24],[1 NPN./6,2 NPN./3,1 NPN./6]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
 lobattoIIIAFourthOrder h f (t, state) = impl h f id id (t, state) where
     impl = genericRKMethod lobattoIIIAFourthOrderTableau []
+
+lobattoIIIAFourthOrderTableauComp = ButcherTableau [[comp 0,comp 0,comp 0],[comp ((5 / 24)),comp 1 / 3,comp (-1)  /24],[comp 1 /6,comp 2 /3,comp 1 /6]] [comp 1 /6,comp 2 /3,comp 1 /6] [comp 0,comp 0.5,comp 1]
+lobattoIIIAFourthOrderComp h f (t, state) = impl h f id id (t, state) where
+    impl = genericRKMethod lobattoIIIAFourthOrderTableauComp []
+
+
 
 lobattoIIIBFourthOrderTableau = ButcherTableau [[1 NPN./6,(-1) NPN./6,0],[((1 NPN./6)::NPN.Double),1 NPN./3,0],[1 NPN./6,5 NPN./6, 0]] [1 NPN./6,2 NPN./3,1 NPN./6] [0,0.5,1]
 lobattoIIIBFourthOrder h f (t, state) = impl h f id id (t, state) where

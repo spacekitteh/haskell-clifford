@@ -115,7 +115,7 @@ instance (SingI p, SingI q, Algebra.Field.C f, Ord f) => Monad (InertialFrame p 
         
 -}
 
-a `cross` b = (negate psuedoScalar) * (a ∧ b)
+a `cross` b = (negate psuedoScalar) * (a `wedge` b)
 
 
 

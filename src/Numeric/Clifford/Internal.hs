@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
-{-# LANGUAGE TypeOperators, TypeFamilies,CPP, ConstraintKinds, RankNTypes, DataKinds #-}
-module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension, DefaultField, AllowableCliffordType) where
+{-# LANGUAGE TypeOperators, TypeFamilies,CPP, ConstraintKinds, RankNTypes, DataKinds, FlexibleInstances #-}
+module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension, DefaultField, AllowableCliffordType, comp) where
 import Numeric.Natural
 import Prelude hiding (head,tail, null)
 import Data.MemoTrie
@@ -12,11 +12,23 @@ import Data.Word
 import GHC.TypeLits
 import Algebra.Field
 import qualified Debug.Trace as DebugTrace
+import Numeric.Compensated
+import MathObj.Wrapper.Haskell98
+import Algebra.Additive (zero)
+import Control.DeepSeq 
+
+instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (MathObj.Wrapper.Haskell98.T (Compensated f))
+comp a = Cons (compensated a zero)
+
+
+
 #ifdef DEBUG
 myTrace = DebugTrace.trace
 #else
 myTrace _ x = x
 #endif
+
+
 
 
 type AllowableCliffordType p q f = forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q)

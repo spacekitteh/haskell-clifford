@@ -10,7 +10,7 @@ name:                clifford
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.14
+version:             0.1.0.15
 
 -- A short (one-line) description of the package.
 synopsis:            A Clifford algebra library
@@ -59,9 +59,9 @@ library
   -- LANGUAGE extensions used by modules in this package.
   other-extensions:    NoImplicitPrelude, ScopedTypeVariables, GADTs, DataKinds,KindSignatures,UnicodeSyntax,FlexibleContexts, RankNTypes,TemplateHaskell,NoMonomorphismRestriction,MultiParamTypeClasses,FlexibleInstances, TypeOperators, UnicodeSyntax, ConstraintKinds
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <4.9, numeric-prelude >= 0.4.0.1 && < 0.5.0, permutation >= 0.4.1 && < 0.5, 
-                       data-ordlist >= 0.4.5 && < 0.5,  converge >= 0.1.0.1 && < 0.2, lens >= 4.0.3 && < 4.1, 
-                       deepseq >= 1.3.0.1 && < 1.4, vector >= 0.10.0.1 && < 0.11, stream-fusion >= 0.1 && < 0.2, criterion >= 0.8.0.0 && < 0.9, derive, QuickCheck, nats, tagged, cereal,hspec, MemoTrie >= 0.6 && < 0.7, semigroupoids >= 4.0 && < 4.1, monoid-extras >=0.3 && <0.4, reflection >=1.4 && < 1.5
+  build-depends:       base >=4.6 && <4.9, numeric-prelude, permutation,
+                       data-ordlist,  converge, lens, 
+                       deepseq, vector, stream-fusion, criterion, derive, QuickCheck, nats, tagged, cereal,hspec, MemoTrie, semigroupoids , monoid-extras , reflection, compensated
   
   ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3
   -- Directories containing source files.
@@ -72,8 +72,8 @@ library
   
 
 executable pendulum
-  build-depends: base, clifford, numeric-prelude,stream-fusion, Chart, Chart-cairo, colour, lens, data-default-class
-  other-extensions: NoImplicitPrelude
+  build-depends: base, clifford, numeric-prelude,stream-fusion, Chart, Chart-cairo, colour, lens, data-default-class, deepseq, compensated
+  other-extensions: NoImplicitPrelude, FlexibleInstances
   main-is: Pendulum.hs
   hs-source-dirs: examples
   default-language: Haskell2010
@@ -93,7 +93,7 @@ benchmark basic-ops
   type: exitcode-stdio-1.0
   hs-source-dirs: bench
   main-is: benchmarks.hs
-  build-depends: base, clifford, criterion, numeric-prelude, stream-fusion
+  build-depends: base, clifford, criterion, numeric-prelude, stream-fusion, compensated, deepseq
   -- -optlo-O3
   ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3 
   default-language: Haskell2010

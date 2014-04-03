@@ -35,8 +35,8 @@ Clifford algebras are a module over a ring. They also support all the usual tran
 \begin{code}
 module Numeric.Clifford.Blade where
 
-import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
-import Algebra.Laws
+import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate, foldr1)
+import Algebra.Laws hiding (zero)
 import Algebra.Absolute
 import Algebra.Additive
 import Control.DeepSeq
@@ -55,6 +55,7 @@ import GHC.Real (fromIntegral, toInteger)
 import Algebra.Field
 import Data.MemoTrie
 import Numeric.Clifford.Internal
+import Numeric.Compensated
 \end{code}
 
 
@@ -117,12 +118,12 @@ bladeNegate b@(Blade _ _) = b&scale%~negate --Blade (Algebra.Additive.negate$ b^
 {-#SPECIALISE bladeScaleLeft::Double->STBlade -> STBlade#-}
 {-#SPECIALISE bladeScaleLeft::Double->E3Blade -> E3Blade#-}
 bladeScaleLeft :: f -> Blade p q f -> Blade p q f
-bladeScaleLeft s (Blade f ind) = Blade (s * f) ind
+bladeScaleLeft s (Blade f ind) = Blade (s `mul` f) ind
 bladeScaleRight :: f -> Blade p q f -> Blade p q f
 {-#INLINE bladeScaleRight #-}
 {-#SPECIALISE bladeScaleRight::Double->STBlade -> STBlade#-}
 {-#SPECIALISE bladeScaleRight::Double->E3Blade -> E3Blade#-}
-bladeScaleRight s (Blade f ind) = Blade (f * s) ind
+bladeScaleRight s (Blade f ind) = Blade (f `mul` s) ind
 \end{code}
 
 However, the plain data constructor should never be used, for it doesn't order them by default. It also needs to represent the vectors in an ordered form for efficiency and niceness. Further, due to skew-symmetry, if the vectors are in an odd permutation compared to the normal form, then the scale is negative. Additionally, since $\vec{e}_k^2 = 1$, pairs of them should be removed.
@@ -191,13 +192,38 @@ First up for operations: Blade multiplication. This is no more than assembling o
 {-#SPECIALISE INLINE bladeMul :: STBlade -> STBlade -> STBlade #-}
 {-#SPECIALISE INLINE bladeMul :: E3Blade -> E3Blade -> E3Blade #-}
 bladeMul ::  Blade p q f -> Blade p q f-> Blade p q f
-bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade (bScale x Algebra.Ring.* bScale y) (bIndices x ++ bIndices y) 
+bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade ((bScale x) `mul` (bScale y)) (bIndices x ++ bIndices y) 
+
+{-# RULES
+ "mulCompensable"  mul   = mulDouble
+ #-}
+mul :: Algebra.Ring.C f => f -> f -> f
+mul x y = x*y
+
+{-#SPECIALISE INLINE mulCompensable :: Double -> Double -> Double #-}
+{-#SPECIALISE INLINE mulCompensable :: Float -> Float -> Float #-}
+mulDouble :: Double -> Double -> Double
+mulDouble = mulCompensable
+mulCompensable :: (Algebra.Ring.C f, Compensable f) => f -> f -> f
+mulCompensable x y = uncompensated $ (times x y compensated) 
+
 multiplyBladeList :: (SingI p, SingI q, Algebra.Field.C f) => [Blade p q f] -> Blade p q f
 multiplyBladeList [] = error "Empty blade list!"
 multiplyBladeList (a:[]) = a
 multiplyBladeList a = bladeNormalForm $ Blade scale indices where
     indices = concatMap bIndices a
-    scale = foldl1 (*) (map bScale a)
+    scale = (foldl1' (*) (map bScale a)) 
+{-# RULES
+ "mulBladeListComp"  multiplyBladeList  = multiplyBladeListDouble 
+ #-}
+multiplyBladeListDouble :: (SingI p, SingI q) => [Blade p q Double] -> Blade p q Double
+multiplyBladeListDouble = multiplyBladeListCompensated
+multiplyBladeListCompensated :: (SingI p, SingI q, Algebra.Field.C f, Compensable f) => [Blade p q f] -> Blade p q f
+multiplyBladeListCompensated [] = error "Empty blade list!"
+multiplyBladeListCompensated (a:[]) = a
+multiplyBladeListCompensated a = bladeNormalForm $ Blade scale indices where
+    indices = concatMap bIndices a
+    scale = (foldr (*^) (compensated one zero) (map bScale a))  & uncompensated
 
 
 \end{code}
@@ -255,21 +281,7 @@ instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f) => Arbitrary (Blade 
       listSize <- choose (0, maxLength)
       indices <- vectorOf (NPN.fromIntegral listSize) (resize (NPN.fromIntegral d-1) arbitrary )
       return (Blade scale indices) 
-          where
                 
-                
-                
-                
-
--- $(derive makeArbitrary ''Blade)
-\end{code}
-
-Now for some testing of algebraic laws.
-
-\begin{code}
-
-
---propCommutativeAddition = commutative (+)
 \end{code}
 \bibliographystyle{IEEEtran}
 \bibliography{biblio.bib}

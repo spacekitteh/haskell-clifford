@@ -15,7 +15,7 @@ This is the numeric integration portion of the library.
 
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
-{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs, DataKinds, KindSignatures #-}
+{-# LANGUAGE NoMonomorphismRestriction, UnicodeSyntax, GADTs, DataKinds, KindSignatures, BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -100,8 +100,7 @@ guessConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
           | (myTrace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
           | totalDifference <= t = showOutput ("guess convergence with tolerance "++ show t )$ Just c where
-
-            totalDifference = compensatedSum' $ zipWith (\x y -> absDiffBetweenLists x y) b c
+            totalDifference =  compensatedSum' $ zipWith (\x y -> absDiffBetweenLists x y) b c
             absDiffBetweenLists :: [Multivector p q f] -> [Multivector p q f] -> f
             absDiffBetweenLists x' y' = compensatedSum' $ map magnitude $ zipWith (\x y -> NPN.abs (x-y)) x' y'
       check _ = Nothing
@@ -184,17 +183,20 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
 
         dy' = sumListOfLists  $ zipWith (\b zi -> map (b *>) zi) b' z
         initialGuess = replicate s (unproject $ f time state )
-        z = guessConverger $ iterate systemOfZiGuesses initialGuess
+        initialGuess' = unfoldr (\(i,st) -> if i>s then Nothing else let st' = evalDerivatives (time + adaptiveStepSizeFraction * (c i)) st in Just (st',(i+1,st'))) (1,state')
+        z = guessConverger $ iterate systemOfZiGuesses initialGuess'
         systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
         systemOfZiGuesses zk = [zi_plus1 i | i <- [1..s]] where
-            atYn = map (elementAdd state') zk
-            zi_plus1 i = map ((adaptiveStepSizeFraction * (c i))*>) $ sumListOfLists scaledByAi where
+            atYn =  map (elementAdd state') zk
+            zi_plus1 i =  map ((adaptiveStepSizeFraction * (c i))*>) $ sumListOfLists scaledByAi where
                 h' = adaptiveStepSizeFraction * (c i)
                 guessTime = time + h'
                 scaledByAi = zipWith (\a evalled-> map (a*>) evalled) (a i) $ map (evalDerivatives guessTime) atYn
         evalDerivatives :: t -> [Multivector p q t] -> [Multivector p q t]
         --basically a wrapper for f
         evalDerivatives time stateAtTime= unproject $ (f time) $ project stateAtTime
+
+
 \end{code}
 
 Look at creating an exponential integrator: https://en.wikipedia.org/wiki/Exponential_integrators
