@@ -18,7 +18,6 @@ import Numeric.Compensated
 import MathObj.Wrapper.Haskell98
 import Control.DeepSeq 
 
-instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (MathObj.Wrapper.Haskell98.T (Compensated f))
 comp a = Cons (compensated a 0)
 scalar2 = scalar (comp 2.0) :: STVectorComp
 ij2 = (comp 2.0) `e` [1,2] :: STVectorComp

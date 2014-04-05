@@ -21,25 +21,28 @@ import Control.DeepSeq
 import MathObj.Wrapper.Haskell98
 import Debug.Trace
 comp a = Cons (fadd a 0.0 compensated)
+--comp = id
 
 m = scalar 1 :: E3VectorComp
 l = scalar 2 :: E3VectorComp
 g = scalar 9.801 :: E3VectorComp
-showOutput name x = Debug.Trace.trace ("output of " ++ name ++" is " ++ show x) x
+
 pendulum t [p,theta] =   [ (-m*g*l)* sin theta, p / (m*l*l)] 
 
-integrator = gaussLegendreFourthOrderComp (comp 0.1)  pendulum 
+integrator = gaussLegendreFourthOrderComp (comp 0.01)  pendulum 
 hamiltonian [ p', theta'] = extract $ magnitude $ (p*p/ (2*m*l*l)) - m*g*l* cos theta where
               p = scalar $ comp p'
               theta = scalar $ comp theta'
 
 
---pendulum _ [theta,thetadot] = [one,(-g/l) * sin theta]
-tenSeconds =   take 5001 $ Debug.Trace.trace ("Value of m is " ++ show m) iterate integrator (0,[zero::E3VectorComp,showOutput "theta initial" $ scalar $ comp (0.3)]) --[zero::E3Vector,one/10]) 
+initialConditions = (0,[zero::E3VectorComp, scalar $ comp (0.3)])
+
+history =   take 20001 $  iterate integrator initialConditions 
 
 extract  = uncompensated . decons
+--extract = id
 plottableFormat :: [(Double,Double,Double)]
-plottableFormat = map ((\ (t, ([BladeSum [Blade a []],BladeSum [Blade b []]])) -> (extract t,extract a,extract b) ) ) tenSeconds
+plottableFormat = map ((\ (t, ([BladeSum [Blade a []],BladeSum [Blade b []]])) -> (extract t,extract a,extract b) ) ) history
 
 chart = toRenderable layout
   where

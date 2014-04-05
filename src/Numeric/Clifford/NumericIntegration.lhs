@@ -46,6 +46,8 @@ import Data.Maybe
 import GHC.TypeLits
 import Numeric.Clifford.Internal
 import Data.DeriveTH
+import Numeric.Compensated
+import MathObj.Wrapper.Haskell98
 
 import qualified Debug.Trace
 
@@ -72,7 +74,7 @@ systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
 convergeList ::(Show f, Ord f) => [[f]] -> [f]
 convergeList = converge
 
-showOutput name x = myTrace ("output of " ++ name ++" is " ++ show x) x
+
 {-#INLINE sumListOfLists #-}
 
 sumListOfLists = map sumList . transpose 
@@ -104,13 +106,16 @@ guessConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
             absDiffBetweenLists :: [Multivector p q f] -> [Multivector p q f] -> f
             absDiffBetweenLists x' y' = compensatedSum' $ map magnitude $ zipWith (\x y -> NPN.abs (x-y)) x' y'
       check _ = Nothing
+
+type ProjectionToManifold p q t stateType = stateType -> [Multivector p q t]
+type DeprojectorFromManifold p q t stateType = [Multivector p q t] -> stateType
 type RKStepper (p::Nat) (q::Nat) t stateType = 
     (Ord t, Show t, Algebra.Module.C t (Multivector p q t), Algebra.Field.C t) => 
      t -> (t -> stateType -> stateType) -> 
-    ([Multivector p q t] -> stateType) -> 
-    (stateType ->[Multivector p q t]) ->
+    DeprojectorFromManifold p q t stateType -> 
+    ProjectionToManifold p q t stateType ->
     (t,stateType) -> (t,stateType)
-data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]}
+data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]} deriving (Eq, Show)
 makeLenses ''ButcherTableau
 
 type StateConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
@@ -135,6 +140,10 @@ $( derive makeIs ''RKAttribute)
 {-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double [E3Vector]] -> RKStepper 3 0 Double [E3Vector]#-}
 {-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double stateType] -> RKStepper 3 1 Double stateType#-}
 {-#SPECIALISE genericRKMethod :: ButcherTableau Double -> [RKAttribute Double [STVector]] -> RKStepper 3 1 Double [STVector]#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType] -> RKStepper 3 0 (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) [E3VectorComp]] -> RKStepper 3 0 (MathObj.Wrapper.Haskell98.T (Compensated Double)) [E3VectorComp]#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType] -> RKStepper 3 1 (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType#-}
+{-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) [STVectorComp]] -> RKStepper 3 1 (MathObj.Wrapper.Haskell98.T (Compensated Double)) [STVectorComp]#-}
 genericRKMethod :: forall (p::Nat) (q::Nat) t stateType . 
                   ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, SingI p, SingI q)
                   =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper p q t stateType
@@ -145,7 +154,6 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     c n = l !!  (n-1) where
         l = _tableauC tableau
     a :: Int -> [t]
-    {-#INLINE a#-}
     a n = (l !! (n-1)) where
         l = _tableauA tableau
     b :: Int -> t
@@ -171,22 +179,28 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
 
     (hamiltonian, hamiltonianExists) = case find isHamiltonianFunction attributes of
                     Just (HamiltonianFunction hamil) -> (hamil,True)
-                    Nothing -> (const zero,False)
+                    Nothing -> (undefined,False)
     
     rkMethodImplicitFixedPoint :: RKStepper p q t stateType
-    rkMethodImplicitFixedPoint h f project unproject (time, state) =
+    rkMethodImplicitFixedPoint h f deproject project (time, state) =
       (time + adaptiveStepSizeFraction*(c s), newState) where
         adaptiveStepSizeFraction = (stepSizeAdapter time state)*h
-        newState = project $ elementAdd state' dy'
-        state' = unproject state 
+        newState = deproject $ elementAdd state' dy'
+        state' = project state 
         lengthOfState = length state'
 
         dy' = sumListOfLists  $ zipWith (\b zi -> map (b *>) zi) b' z
-        initialGuess = replicate s (unproject $ f time state )
-        initialGuess' = unfoldr (\(i,st) -> if i>s then Nothing else let st' = evalDerivatives (time + adaptiveStepSizeFraction * (c i)) st in Just (st',(i+1,st'))) (1,state')
-        z = guessConverger $ iterate systemOfZiGuesses initialGuess'
+
+        --set the initial guess as the derivatives evaluated at appropriate times through the timestep
+        initialGuess = unfoldr (\(i,st) -> if i>s 
+                                           then 
+                                               Nothing 
+                                           else 
+                                               let st' = evalDerivatives (time + adaptiveStepSizeFraction * (c i)) st 
+                                               in Just (st',(i+1,st'))) (1,state')
+        z = guessConverger $ iterate systemOfZiGuesses initialGuess
         systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
-        systemOfZiGuesses zk = [zi_plus1 i | i <- [1..s]] where
+        systemOfZiGuesses !zk = [zi_plus1 i | i <- [1..s]] where
             atYn =  map (elementAdd state') zk
             zi_plus1 i =  map ((adaptiveStepSizeFraction * (c i))*>) $ sumListOfLists scaledByAi where
                 h' = adaptiveStepSizeFraction * (c i)
@@ -194,7 +208,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                 scaledByAi = zipWith (\a evalled-> map (a*>) evalled) (a i) $ map (evalDerivatives guessTime) atYn
         evalDerivatives :: t -> [Multivector p q t] -> [Multivector p q t]
         --basically a wrapper for f
-        evalDerivatives time stateAtTime= unproject $ (f time) $ project stateAtTime
+        evalDerivatives time stateAtTime= project $ (f time) $ deproject stateAtTime
 
 
 \end{code}

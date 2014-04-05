@@ -195,7 +195,7 @@ instance (Algebra.Field.C f, SingI p, SingI q, Ord f) => Data.Monoid.Monoid (Pro
 e :: (Algebra.Field.C f, Ord f, SingI p, SingI q) => f -> [Natural] -> Multivector p q f
 s `e` indices = mvNormalForm $ BladeSum [Blade s indices]
 {-#INLINE scalar#-}
-scalar s = s `e` []
+scalar s = BladeSum [scalarBlade s]
 
 
 instance (Control.DeepSeq.NFData f) => Control.DeepSeq.NFData (Multivector p q f)

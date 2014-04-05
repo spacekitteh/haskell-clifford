@@ -106,10 +106,10 @@ scalarBlade :: (Algebra.Field.C f, SingI p, SingI q) => f -> Blade p q f
 scalarBlade d = Blade d []
 
 zeroBlade :: (Algebra.Field.C f, SingI p, SingI q) => Blade p q f
-zeroBlade = scalarBlade Algebra.Additive.zero
+zeroBlade = scalarBlade zero
 
 bladeNonZero :: (Algebra.Additive.C f, Eq f) => Blade p q f -> Bool
-bladeNonZero b@(Blade _ _) = b^.scale /= Algebra.Additive.zero
+bladeNonZero (Blade s _) = s /= Algebra.Additive.zero
 
 bladeNegate :: (Algebra.Additive.C f) =>  Blade p q f -> Blade p q f
 bladeNegate b@(Blade _ _) = b&scale%~negate --Blade (Algebra.Additive.negate$ b^.scale) (b^.indices)

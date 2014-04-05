@@ -125,10 +125,10 @@ data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {r :: Multivector p q t
 
 
 
-data RigidBody (p::Nat) (q::Nat) f where
+{-data RigidBody (p::Nat) (q::Nat) f where
  RigidBody:: (Algebra.Field.C f, Algebra.Module.C f (Multivector p q f)) =>  {bodyName::String, frame::ReferenceFrame p q f, mass :: f, inertia :: Multivector p q f, position :: Multivector p q f, attitude :: Multivector p q f, velocity :: Multivector p q f, angularVelocity :: Multivector p q f
                              } -> RigidBody p q f
-
+-}
 --makeLenses ''RigidBody doesn't actually work
 {- Things to do: 
 4. create a 1-form type 
@@ -136,6 +136,35 @@ data RigidBody (p::Nat) (q::Nat) f where
 -}
 
 
+
+
+newtype Position p q f = Position (Multivector p q f)
+newtype Velocity p q f = Velocity (Multivector p q f)
+newtype Force p q f = Force (Multivector p q f)
+newtype Mass p q f = Mass (Multivector p q f)
+newtype Time p q f = Time (Multivector p q f)
+newtype Momentum p q f = Momentum (Multivector p q f)
+
+class Body p q f a where
+    frame :: a -> ReferenceFrame p q f
+    position :: a -> Position p q f
+    velocity :: a -> Velocity p q f
+
+class (Algebra.Field.C f, SingI p, SingI q, Ord f, Body p q f a) => MassiveBody p q f a where
+    mass :: a -> Mass p q f
+    momentum :: a -> Momentum p q f
+    momentum body = Momentum (m*v) where
+        (Mass m) = mass body
+        (Velocity v) = velocity body
+
+
+class Region p q f a where
+    isInside :: forall b .Body p q f b =>  a -> b -> Bool
+
+-- | Time -> Item -> Force
+type ForceFunction p q f a = Time p q f -> a -> Force p q f
+class Region p q f a => ForceField p q f a where
+    actOn :: ForceFunction p q f a
 
 \end{code}
 \bibliographystyle{IEEEtran}

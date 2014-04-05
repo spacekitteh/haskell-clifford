@@ -1,8 +1,8 @@
 {-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -O3 -optlc-O=3 -Wall #-}
-{-# LANGUAGE TypeOperators, TypeFamilies,CPP, ConstraintKinds, RankNTypes, DataKinds, FlexibleInstances #-}
-module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension, DefaultField, AllowableCliffordType, comp) where
+{-# LANGUAGE TypeOperators, TypeFamilies,CPP, ConstraintKinds, RankNTypes, DataKinds, FlexibleInstances, StandaloneDeriving #-}
+module Numeric.Clifford.Internal (myTrace, trie, untrie, enumerate, dimension, DefaultField, AllowableCliffordType, comp, showOutput) where
 import Numeric.Natural
-import Prelude hiding (head,tail, null)
+import Prelude hiding (head,tail, null, (++))
 import Data.MemoTrie
 import Data.List.Stream
 import Control.Arrow
@@ -28,7 +28,7 @@ myTrace = DebugTrace.trace
 myTrace _ x = x
 #endif
 
-
+showOutput name x = myTrace ("output of " ++ name ++" is " ++ show x) x
 
 
 type AllowableCliffordType p q f = forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q)
