@@ -30,7 +30,7 @@ This is the classical mechanics portion of the library.
 module Numeric.Clifford.ClassicalMechanics where
 import Numeric.Clifford.Multivector as MV
 import Numeric.Clifford.Blade
-import GHC.TypeLits
+import GHC.TypeLits 
 import Data.Proxy
 import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate, all, (.) )
 import Algebra.Absolute
@@ -58,18 +58,20 @@ import Numeric.Clifford.Internal
 import Numeric.Clifford.LinearOperators
 import Control.Applicative
 import Data.Monoid
+import Data.Dynamic
+import Data.Data
 import Control.Category
 
 nonEqualFrames = "Non-equal reference frames! Insert code here to translate between them! :) Should really make reference frames as types and then have type families to convert between them :v :v :v"
 
 
-data EnergyMethod (p::Nat) (q::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem p q f -> Multivector p q f], _dps :: [DynamicSystem p q f -> Multivector p q f]}
+{- data EnergyMethod (p::Nat) (q::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem p q f -> Multivector p q f], _dps :: [DynamicSystem p q f -> Multivector p q f]}
 
 data DynamicSystem (p::Nat) (q::Nat) f = DynamicSystem {_time :: f, coordinates :: [Multivector p q f], _momenta :: [Multivector p q f], _energyFunction :: EnergyMethod p q f, _projector :: DynamicSystem p q f -> DynamicSystem p q f}
 
 makeLenses ''EnergyMethod
 makeLenses ''DynamicSystem
-
+-}
 --evaluateDerivative s = dq++ dp where
 --    dq = (s&energyFunction.dqs) -- s
 --    dp = (s&energyFunction.dps) -- s
@@ -84,8 +86,13 @@ makeLenses ''DynamicSystem
 
 Now to make a physical object.
 \begin{code}
-data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {frameName :: String, euclideanMove :: EuclideanMove p q t, velocityRelToParentFrame :: Multivector p q t, angularVelocityRelToParentFrame :: Multivector p q t, parent :: ReferenceFrame p q t}
-                                        |GlobalAbsoluteFrame deriving (Eq, Show)
+data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {  frameName :: String
+                                                       , euclideanMove :: EuclideanMove p q t
+                                                       , velocityRelToParentFrame :: Multivector p q t
+                                                       , angularVelocityRelToParentFrame :: Multivector p q t
+                                                       , parent :: ReferenceFrame p q t
+                                                       }
+                                        | GlobalAbsoluteFrame deriving (Eq, Show)
 
 
 getRigidDisplacementRelToInertial :: (Algebra.Field.C t, Ord t, SingI p, SingI q) =>  ReferenceFrame p q t -> EuclideanMove   p q t
@@ -119,7 +126,7 @@ a `cross` b = (negate psuedoScalar) * (a `wedge` b)
 
 
 
-data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {r :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
+data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {radius :: Multivector p q t, referenceFrame :: ReferenceFrame p q t}
 
 
 
@@ -138,33 +145,98 @@ data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {r :: Multivector p q t
 
 
 
+
+data Variable f a = Variable{symbol ∷ String, access ∷ Lens' f a , fgs∷a}
+
+
 newtype Position p q f = Position (Multivector p q f)
 newtype Velocity p q f = Velocity (Multivector p q f)
 newtype Force p q f = Force (Multivector p q f)
 newtype Mass p q f = Mass (Multivector p q f)
-newtype Time p q f = Time (Multivector p q f)
+newtype Time f = Time (f)
 newtype Momentum p q f = Momentum (Multivector p q f)
-
-class Body p q f a where
-    frame :: a -> ReferenceFrame p q f
-    position :: a -> Position p q f
-    velocity :: a -> Velocity p q f
-
-class (Algebra.Field.C f, SingI p, SingI q, Ord f, Body p q f a) => MassiveBody p q f a where
-    mass :: a -> Mass p q f
-    momentum :: a -> Momentum p q f
-    momentum body = Momentum (m*v) where
-        (Mass m) = mass body
-        (Velocity v) = velocity body
+newtype Charge p q f = Charge (Multivector p q f)
+newtype Spinor p q f = Spinor (Multivector p q f)
+newtype Inertia p q f = Inertia (Multivector p q f)
+newtype AngularVelocity p q f = AngularVelocity (Multivector p q f)
+newtype AngularMomentum p q f = AngularMomentum (Multivector p q f)
+class Entity a where
+      name  ∷ Lens' a String
 
 
-class Region p q f a where
+class Entity a ⇒ Body  (p∷Nat) (q∷Nat) f a where
+    frame :: Lens' a (ReferenceFrame p q f)
+    position :: Lens' a (Position p q f) 
+    velocity :: Lens' a (Velocity p q f) 
+    momentum :: Lens' a (Momentum p q f) 
+
+class (Algebra.Field.C f, Ord f, SingI p, SingI q, Body p q f a) => MassiveBody p q f a where
+    mass :: Lens' a (Mass p q f)
+    
+
+
+
+data PointMass p q f = PointMass { _PointMassName ∷ String, _PointMassFrame ∷ ReferenceFrame p q f, _PointMassPosition ∷ Position p q f, _PointMassVelocity ∷ Velocity p q f, _PointMassMass ∷ Mass p q f, _PointMassMomentum ∷ Momentum p q f}
+
+instance Entity (PointMass p q f) where
+    name = lens _PointMassName (\p n → p {_PointMassName = n})
+
+instance Body p q f (PointMass p q f) where
+    frame = lens _PointMassFrame (\p f → p {_PointMassFrame = f})
+    position = lens _PointMassPosition (\p pos → p {_PointMassPosition = pos})
+    velocity = lens _PointMassVelocity (\p v → p {_PointMassVelocity = v})
+    momentum = lens _PointMassMomentum (\p mom → p {_PointMassMomentum = mom})
+    
+
+instance (Algebra.Field.C f, Ord f, SingI p, SingI q) ⇒ MassiveBody p q f (PointMass p q f) where
+    mass = lens _PointMassMass (\p m → p {_PointMassMass = m})
+
+
+class (Algebra.Field.C f, SingI p, SingI q, Ord f, MassiveBody p q f a) ⇒ ChargedBody p q f a where
+    electricCharge ∷ Lens' a (Charge p q f)
+    magneticCharge ∷ Lens' a (Charge p q f)
+    
+class (MassiveBody p q f a) ⇒ RigidBody p q f a where
+    attitude ∷ Lens' a (Spinor p q f) 
+    angularVelocity ∷ Lens' a (AngularVelocity p q f)
+    angularMomentum ∷ Lens' a (AngularMomentum p q f)
+    inertia ∷ Lens' a (Inertia p q f)
+
+class (Algebra.Field.C f, Ord f, MassiveBody p q f a) ⇒ AerodynamicBody p q f a where
+    liftCoefficient ∷ a → Velocity p q f → Multivector p q f
+    dragCoefficient ∷ a → Velocity p q f → Multivector p q f
+    shearCoefficient ∷ a → Velocity p q f → Multivector p q f
+    shearCoefficient a = const zero 
+
+
+class (Entity a) ⇒ Region p q f a where
     isInside :: forall b .Body p q f b =>  a -> b -> Bool
 
 -- | Time -> Item -> Force
-type ForceFunction p q f a = Time p q f -> a -> Force p q f
+type ForceFunction p q f a = Time f -> a -> Force p q f
+
 class Region p q f a => ForceField p q f a where
     actOn :: ForceFunction p q f a
+
+
+
+
+
+data Inhabitant = ABody {b∷Dynamic}
+                | ARegion {r∷Dynamic} deriving ( Show, Typeable)
+
+
+class (Functor funct) ⇒  World (p∷Nat) (q∷Nat) fieldType funct a where 
+    asFunctor ∷ a → funct Inhabitant 
+    time ∷ Lens' a (Time fieldType)
+
+data EuclideanWorld fieldType
+
+instance World 3 0 fieldType [] (EuclideanWorld fieldType) where
+    asFunctor w = []
+
+
+
 
 \end{code}
 \bibliographystyle{IEEEtran}

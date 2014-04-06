@@ -66,4 +66,3 @@ chart = toRenderable layout
            $ def
 
 main = renderableToFile def  chart "pendulum.png"
-
