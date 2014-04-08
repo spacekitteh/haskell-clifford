@@ -11,7 +11,7 @@
 \title{haskell-clifford: A Haskell Clifford algebra dynamics library}
 \begin{document}
 
-This is the classical mechanics portion of the library. 
+This is the classical mechanics portion of the library.  
 
 \begin{code}
 {-# LANGUAGE NoImplicitPrelude, FlexibleContexts, RankNTypes, ScopedTypeVariables, DeriveDataTypeable #-}
@@ -81,7 +81,6 @@ makeLenses ''DynamicSystem
 
 
 
-
 \end{code}
 
 Now to make a physical object.
@@ -146,20 +145,20 @@ data PhysicalVector (p::Nat) (q::Nat) t = PhysicalVector {radius :: Multivector 
 
 
 
-data Variable f a = Variable{symbol ∷ String, access ∷ Lens' f a , fgs∷a}
+data Variable f a = Variable{symbol ∷ String, access ∷ Lens' f a }
 
 
-newtype Position p q f = Position (Multivector p q f)
-newtype Velocity p q f = Velocity (Multivector p q f)
-newtype Force p q f = Force (Multivector p q f)
-newtype Mass p q f = Mass (Multivector p q f)
-newtype Time f = Time (f)
-newtype Momentum p q f = Momentum (Multivector p q f)
-newtype Charge p q f = Charge (Multivector p q f)
-newtype Spinor p q f = Spinor (Multivector p q f)
-newtype Inertia p q f = Inertia (Multivector p q f)
-newtype AngularVelocity p q f = AngularVelocity (Multivector p q f)
-newtype AngularMomentum p q f = AngularMomentum (Multivector p q f)
+newtype Position p q f = Position {unPosition ∷ Multivector p q f}
+newtype Velocity p q f = Velocity {unVelocity ∷ Multivector p q f}
+newtype Force p q f = Force {unForce ∷ Multivector p q f}
+newtype Mass p q f = Mass {unMass :: Multivector p q f}
+newtype Time f = Time {unTime ∷  f}
+newtype Momentum p q f = Momentum {unMomentum ∷ Multivector p q f}
+newtype Charge p q f = Charge {unCharge ∷ Multivector p q f}
+newtype Spinor p q f = Spinor {unSpinor ∷ Multivector p q f}
+newtype Inertia p q f = Inertia {unInertia :: Multivector p q f}
+newtype AngularVelocity p q f = AngularVelocity {unAngularVelocity :: Multivector p q f}
+newtype AngularMomentum p q f = AngularMomentum {unAngularMomentum :: Multivector p q f}
 class Entity a where
       name  ∷ Lens' a String
 
@@ -187,6 +186,7 @@ instance Body p q f (PointMass p q f) where
     velocity = lens _PointMassVelocity (\p v → p {_PointMassVelocity = v})
     momentum = lens _PointMassMomentum (\p mom → p {_PointMassMomentum = mom})
     
+
 
 instance (Algebra.Field.C f, Ord f, SingI p, SingI q) ⇒ MassiveBody p q f (PointMass p q f) where
     mass = lens _PointMassMass (\p m → p {_PointMassMass = m})
@@ -217,8 +217,11 @@ type ForceFunction p q f a = Time f -> a -> Force p q f
 
 class Region p q f a => ForceField p q f a where
     actOn :: ForceFunction p q f a
+    
 
 
+
+-- perhaps an array of getters on objects?
 
 
 
