@@ -46,15 +46,20 @@ import Data.Maybe
 import GHC.TypeLits
 import Numeric.Clifford.Internal
 import Data.DeriveTH
-import Numeric.Compensated
+import Numeric.Compensated hiding ((*^))
+import Data.VectorSpace ((*^))
 import MathObj.Wrapper.Haskell98
-
+import Numeric.Clifford.Manifold
 import qualified Debug.Trace
 
 elementAdd = zipWith (+)
 elementScale = zipWith (*>) 
 a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
+
+
+
+
 
 --This will stop as soon as one of the elements converges. This is bad. Need to make it skip convergent ones and focus on the remainig.
 systemBroydensMethod f x0 x1 = map fst $ update (x1,ident) x0  where
@@ -115,7 +120,7 @@ type RKStepper (p::Nat) (q::Nat) t stateType =
     DeprojectorFromManifold p q t stateType -> 
     ProjectionToManifold p q t stateType ->
     (t,stateType) -> (t,stateType)
-data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC :: [f]} deriving (Eq, Show)
+data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC ∷ [f]} deriving (Eq, Show)
 makeLenses ''ButcherTableau
 
 type StateConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
@@ -196,7 +201,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                                            then 
                                                Nothing 
                                            else 
-                                               let st' = evalDerivatives (time + adaptiveStepSizeFraction * (c i)) st 
+                                               let st' = snd . unManifoldTangent $ evalDerivatives (time + adaptiveStepSizeFraction * (c i)) (Manifold st) 
                                                in Just (st',(i+1,st'))) (1,state')
         z = guessConverger $ iterate systemOfZiGuesses initialGuess
         systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
@@ -205,10 +210,13 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
             zi_plus1 i =  map ((adaptiveStepSizeFraction * (c i))*>) $ sumListOfLists scaledByAi where
                 h' = adaptiveStepSizeFraction * (c i)
                 guessTime = time + h'
-                scaledByAi = zipWith (\a evalled-> map (a*>) evalled) (a i) $ map (evalDerivatives guessTime) atYn
-        evalDerivatives :: t -> [Multivector p q t] -> [Multivector p q t]
+                scaledByAi = map (snd . unManifoldTangent) $ zipWith (\a evalled-> a *^ evalled) (a i) derivs 
+                derivs ∷ [ManifoldTangent p q t]
+                derivs =  map (evalDerivatives guessTime) $ map Manifold atYn
+        evalDerivatives :: t -> DerivativeFunction p q t 
         --basically a wrapper for f
-        evalDerivatives time stateAtTime= project $ (f time) $ deproject stateAtTime
+        evalDerivatives time stateAtTime = ManifoldTangent (stateAtTime, tangent) where
+          tangent =  project $ f time $ deproject $ unManifold stateAtTime 
 
 
 \end{code}

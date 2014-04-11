@@ -18,16 +18,17 @@ import Numeric.Compensated
 import MathObj.Wrapper.Haskell98
 import Control.DeepSeq 
 
-comp a = Cons (compensated a 0)
-scalar2 = scalar (comp 2.0) :: STVectorComp
-ij2 = (comp 2.0) `e` [1,2] :: STVectorComp
-ik3 = (comp 3.0) `e` [1,3] :: STVectorComp
-ijk4 = (comp 4.0) `e` [1,2,3] :: STVectorComp 
-ijl5 = (comp 5.0) `e` [1,2,4] :: STVectorComp
+--comp a = Cons (compensated a 0)
+comp = id
+scalar2 = scalar (comp 2.0) :: STVector
+ij2 = (comp 2.0) `e` [1,2] :: STVector
+ik3 = (comp 3.0) `e` [1,3] :: STVector
+ijk4 = (comp 4.0) `e` [1,2,3] :: STVector
+ijl5 = (comp 5.0) `e` [1,2,4] :: STVector
 a = ij2 + ik3 + ijk4 + ijl5 + (scalar 1.5)
 enormousThing = a*a*a*a*a*a*a + scalar2
-expDecay _ x =  map negate $ map ((*) (1.3 `e` [] :: STVectorComp))  x
-thelambda init = lobattoIIIAFourthOrderComp (comp 0.01)  expDecay init
+expDecay _ x =  map negate $ map ((*) (1.3 `e` [] :: STVector))  x
+thelambda init = lobattoIIIAFourthOrder (comp 0.01)  expDecay init
 
 
 main = defaultMain [

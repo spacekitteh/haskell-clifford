@@ -51,7 +51,7 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Numeric.Clifford.Blade, Numeric.Clifford.Multivector, Numeric.Clifford.NumericIntegration, Numeric.Clifford.NumericIntegration.DefaultIntegrators, Numeric.Clifford.ClassicalMechanics, Numeric.Clifford.LinearOperators, Numeric.Clifford.Internal
+  exposed-modules:     Numeric.Clifford.Blade, Numeric.Clifford.Multivector, Numeric.Clifford.NumericIntegration, Numeric.Clifford.NumericIntegration.DefaultIntegrators, Numeric.Clifford.ClassicalMechanics, Numeric.Clifford.LinearOperators, Numeric.Clifford.Internal, Numeric.Clifford.Manifold
   
   -- Modules included in this library but not exported.
   -- other-modules:       
@@ -61,9 +61,9 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.6 && <4.9, numeric-prelude, permutation,
                        data-ordlist,  converge, lens, 
-                       deepseq, vector, stream-fusion, criterion, derive, QuickCheck, nats, tagged, cereal,hspec, MemoTrie, semigroupoids , monoid-extras , reflection, compensated
+                       deepseq, vector, stream-fusion, criterion, derive, QuickCheck, nats, tagged, cereal,hspec, MemoTrie, semigroupoids , monoid-extras , reflection, compensated, vector-space, vector-space-points
   
-  ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3 
+  ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3 -ferror-spans
   -- Directories containing source files.
   hs-source-dirs:      src
   

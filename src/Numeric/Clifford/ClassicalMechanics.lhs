@@ -65,21 +65,6 @@ import Control.Category
 nonEqualFrames = "Non-equal reference frames! Insert code here to translate between them! :) Should really make reference frames as types and then have type families to convert between them :v :v :v"
 
 
-{- data EnergyMethod (p::Nat) (q::Nat) f = Hamiltonian{ _dqs :: [DynamicSystem p q f -> Multivector p q f], _dps :: [DynamicSystem p q f -> Multivector p q f]}
-
-data DynamicSystem (p::Nat) (q::Nat) f = DynamicSystem {_time :: f, coordinates :: [Multivector p q f], _momenta :: [Multivector p q f], _energyFunction :: EnergyMethod p q f, _projector :: DynamicSystem p q f -> DynamicSystem p q f}
-
-makeLenses ''EnergyMethod
-makeLenses ''DynamicSystem
--}
---evaluateDerivative s = dq++ dp where
---    dq = (s&energyFunction.dqs) -- s
---    dp = (s&energyFunction.dps) -- s
---    dq = map ($ s) ((dqs $ energyFunction) s) --s&energyFunction.dqs.traverse--map ($ s) ((dqs . energyFunction) s)
---    dp = map ($ s) ((dps $ energyFunction) s)
-
-
-
 
 \end{code}
 
@@ -210,12 +195,12 @@ class (Algebra.Field.C f, Ord f, MassiveBody p q f a) ⇒ AerodynamicBody p q f 
 
 
 class (Entity a) ⇒ Region p q f a where
-    isInside :: forall b .Body p q f b =>  a -> b -> Bool
+    isInside :: forall b . Body p q f b =>  a -> b -> Bool
 
 -- | Time -> Item -> Force
-type ForceFunction p q f a = Time f -> a -> Force p q f
+type ForceFunction p q f a = Time f → a → Force p q f
 
-class Region p q f a => ForceField p q f a where
+class Region p q f a ⇒ ForceField p q f a where
     actOn :: ForceFunction p q f a
     
 

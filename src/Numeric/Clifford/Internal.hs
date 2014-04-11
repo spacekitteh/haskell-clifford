@@ -31,7 +31,7 @@ myTrace _ x = x
 showOutput name x = myTrace ("output of " ++ name ++" is " ++ show x) x
 
 
-type AllowableCliffordType p q f = forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, SingI p, SingI q)
+type AllowableCliffordType p q f = forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Field.C f, KnownNat p, KnownNat q)
 type DefaultField = Double
 
 instance HasTrie Natural where
