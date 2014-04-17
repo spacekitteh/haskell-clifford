@@ -51,6 +51,7 @@ import Test.QuickCheck
 import Control.Lens hiding (indices)
 import Data.DeriveTH
 import GHC.TypeLits hiding (isEven, isOdd)
+import Data.Proxy
 import GHC.Real (fromIntegral, toInteger)
 import Algebra.Field
 import Data.MemoTrie
@@ -66,7 +67,7 @@ The first problem: How to represent basis blades. One way to do it is via genera
 
 
 data Blade (p :: Nat) (q :: Nat) f where
-    Blade :: forall (p::Nat) (q::Nat) f . (Algebra.Field.C f, SingI p, SingI q) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
+    Blade :: forall (p::Nat) (q::Nat) f . (KnownNat p, KnownNat q, Algebra.Field.C f) => {_scale :: f, _indices :: [Natural]} -> Blade p q f
 
 type STBlade = Blade 3 1 Double
 type E3Blade = Blade 3 0 Double
@@ -74,8 +75,8 @@ type E3Blade = Blade 3 0 Double
 scale = lens _scale (\b@(Blade _ ind) v -> Blade v ind)
 indices :: Lens' (Blade p q f) [Natural]
 indices = lens _indices (\blade v -> blade {_indices = v})
-dimension :: forall (p::Nat) (q::Nat) f. (SingI p, SingI q) => Blade p q f ->  (Natural,Natural)
-dimension _ = (toNatural  ((GHC.Real.fromIntegral $ fromSing (sing :: Sing p))::Word),toNatural((GHC.Real.fromIntegral $ fromSing (sing :: Sing q))::Word))
+dimension :: forall (p::Nat) (q::Nat) f. (KnownNat p, KnownNat q) => Blade p q f ->  (Natural,Natural)
+dimension _ = (toNatural  ((GHC.Real.fromIntegral $ natVal (Proxy∷Proxy p))::Word),toNatural((GHC.Real.fromIntegral $ natVal (Proxy ∷ Proxy q))::Word))
 
 {-#INLINE bScale #-}
 bScale :: Blade p q f -> f
@@ -102,10 +103,10 @@ instance (Algebra.Additive.C f, Eq f) => Eq (Blade p q f) where
 
 For example, a scalar could be constructed like so: \texttt{Blade s []}
 \begin{code}
-scalarBlade :: (Algebra.Field.C f, SingI p, SingI q) => f -> Blade p q f
+scalarBlade :: (Algebra.Field.C f, KnownNat p, KnownNat q) => f -> Blade p q f
 scalarBlade d = Blade d []
 
-zeroBlade :: (Algebra.Field.C f, SingI p, SingI q) => Blade p q f
+zeroBlade :: (Algebra.Field.C f, KnownNat p, KnownNat q ) => Blade p q f
 zeroBlade = scalarBlade zero
 
 bladeNonZero :: (Algebra.Additive.C f, Eq f) => Blade p q f -> Bool
@@ -144,8 +145,8 @@ bladeNormalForm :: ∀ (p::Nat) (q::Nat) f.  Blade p q f -> Blade p q f
 bladeNormalForm (Blade scale indices)  = result 
         where
              result = if (any (\i -> (GHC.Real.toInteger i) >= d) indices) then zeroBlade else Blade scale' newIndices
-             p' = (fromSing (sing :: Sing p)) :: Integer
-             q' = (fromSing (sing :: Sing q)) :: Integer
+             p' = (natVal (Proxy :: Proxy p)) :: Integer
+             q' = (natVal (Proxy :: Proxy q)) :: Integer
              d = p' + q'             
              scale' = if doNotNegate  then scale else negate scale
              (newIndices, doNotNegate) = sortIndices (indices,q')
@@ -200,14 +201,14 @@ bladeMul x@(Blade _ _) y@(Blade _ _)= bladeNormalForm $ Blade ((bScale x) `mul` 
 mul :: Algebra.Ring.C f => f -> f -> f
 mul x y = x*y
 
-{-#SPECIALISE INLINE mulCompensable :: Double -> Double -> Double #-}
+{-#SPECIALISE mulCompensable :: Double -> Double -> Double #-}
 {-#SPECIALISE INLINE mulCompensable :: Float -> Float -> Float #-}
 mulDouble :: Double -> Double -> Double
 mulDouble = mulCompensable
 mulCompensable :: (Algebra.Ring.C f, Compensable f) => f -> f -> f
 mulCompensable x y = uncompensated $ (times x y compensated) 
 
-multiplyBladeList :: (SingI p, SingI q, Algebra.Field.C f) => [Blade p q f] -> Blade p q f
+multiplyBladeList :: (KnownNat p, KnownNat q, Algebra.Field.C f) => [Blade p q f] -> Blade p q f
 multiplyBladeList [] = error "Empty blade list!"
 multiplyBladeList (a:[]) = a
 multiplyBladeList a = bladeNormalForm $ Blade scale indices where
@@ -216,9 +217,9 @@ multiplyBladeList a = bladeNormalForm $ Blade scale indices where
 {-# RULES
  "mulBladeListComp"  multiplyBladeList  = multiplyBladeListDouble 
  #-}
-multiplyBladeListDouble :: (SingI p, SingI q) => [Blade p q Double] -> Blade p q Double
+multiplyBladeListDouble :: (KnownNat p, KnownNat q) => [Blade p q Double] -> Blade p q Double
 multiplyBladeListDouble = multiplyBladeListCompensated
-multiplyBladeListCompensated :: (SingI p, SingI q, Algebra.Field.C f, Compensable f) => [Blade p q f] -> Blade p q f
+multiplyBladeListCompensated :: (KnownNat p, KnownNat q, Algebra.Field.C f, Compensable f) => [Blade p q f] -> Blade p q f
 multiplyBladeListCompensated [] = error "Empty blade list!"
 multiplyBladeListCompensated (a:[]) = a
 multiplyBladeListCompensated a = bladeNormalForm $ Blade scale indices where
@@ -271,10 +272,10 @@ compareIndices = memo compareIndices' where
                                 EQ -> compare a b
 
 
-instance (SingI p, SingI q, Algebra.Field.C f, Arbitrary f) => Arbitrary (Blade p q f) where
+instance (KnownNat p, KnownNat q, Algebra.Field.C f, Arbitrary f) => Arbitrary (Blade p q f) where
     arbitrary = do
-      let p'' = (fromSing (sing :: Sing p)) :: Integer
-      let q'' = (fromSing (sing :: Sing q)) 
+      let p'' = (natVal (Proxy :: Proxy p)) :: Integer
+      let q'' = (natVal (Proxy :: Proxy q)) 
       let d = p'' + q''
       let maxLength = (2^d - 1) :: Integer
       scale <- arbitrary

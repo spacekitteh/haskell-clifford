@@ -79,11 +79,11 @@ data ReferenceFrame (p::Nat) (q::Nat) t = RelativeFrame {  frameName :: String
                                         | GlobalAbsoluteFrame deriving (Eq, Show)
 
 
-getRigidDisplacementRelToInertial :: (Algebra.Field.C t, Ord t, SingI p, SingI q) =>  ReferenceFrame p q t -> EuclideanMove   p q t
+getRigidDisplacementRelToInertial :: (Algebra.Field.C t, Ord t, KnownNat p, KnownNat q) =>  ReferenceFrame p q t -> EuclideanMove   p q t
 getRigidDisplacementRelToInertial GlobalAbsoluteFrame = mempty
 --getRigidDisplacementRelToInertial (RelativeFrame _ displacement mother) = displacement <> (getRigidDisplacementRelToInertial mother)
 
-getFrameTransformation :: forall (p::Nat) (q::Nat) t . (Algebra.Field.C t, Ord t, SingI p, SingI q) =>  ReferenceFrame p q t -> ReferenceFrame p q t -> EuclideanMove p q t
+getFrameTransformation :: forall (p::Nat) (q::Nat) t . (Algebra.Field.C t, Ord t, KnownNat p, KnownNat q) =>  ReferenceFrame p q t -> ReferenceFrame p q t -> EuclideanMove p q t
 getFrameTransformation r' r = undefined
 
 {-data InertialFrame (p::Nat) (q::Nat) f t = InertialFrame {objects :: t, changeFrame :: t -> EuclideanMove p q f -> t, frame :: ReferenceFrame p q f}
@@ -92,14 +92,14 @@ getFrameTransformation r' r = undefined
 instance Functor (InertialFrame p q f) where
     fmap func (InertialFrame objs changeFrame frame) = InertialFrame (func objs) (changeFrame . func) frame
 
-instance (SingI p, SingI q) => Applicative (InertialFrame p q f) where
+instance (KnownNat p, KnownNat q) => Applicative (InertialFrame p q f) where
     pure a = InertialFrame a GlobalAbsoluteFrame where 
     (<*>) (InertialFrame func trans1 frame1) (InertialFrame objs trans2 frame2) = if (name frame1)==(name frame2)
                                                                     then InertialFrame (func objs) frame1 
                                                                     else InertialFrame (trans2 (func objs) (getFrameTransformation frame2 frame1)) trans2 frame1
 
 
-instance (SingI p, SingI q, Algebra.Field.C f, Ord f) => Monad (InertialFrame p q f) where
+instance (KnownNat p, KnownNat q, Algebra.Field.C f, Ord f) => Monad (InertialFrame p q f) where
     return = pure
     (>>=) (InertialFrame objA changeFrameA frameA)  func = undefined where
         (InertialFrame objB changeFrameB frameB) = func objA
@@ -154,7 +154,7 @@ class Entity a ⇒ Body  (p∷Nat) (q∷Nat) f a where
     velocity :: Lens' a (Velocity p q f) 
     momentum :: Lens' a (Momentum p q f) 
 
-class (Algebra.Field.C f, Ord f, SingI p, SingI q, Body p q f a) => MassiveBody p q f a where
+class (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q, Body p q f a) => MassiveBody p q f a where
     mass :: Lens' a (Mass p q f)
     
 
@@ -173,11 +173,11 @@ instance Body p q f (PointMass p q f) where
     
 
 
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q) ⇒ MassiveBody p q f (PointMass p q f) where
+instance (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) ⇒ MassiveBody p q f (PointMass p q f) where
     mass = lens _PointMassMass (\p m → p {_PointMassMass = m})
 
 
-class (Algebra.Field.C f, SingI p, SingI q, Ord f, MassiveBody p q f a) ⇒ ChargedBody p q f a where
+class (Algebra.Field.C f, KnownNat p, KnownNat q, Ord f, MassiveBody p q f a) ⇒ ChargedBody p q f a where
     electricCharge ∷ Lens' a (Charge p q f)
     magneticCharge ∷ Lens' a (Charge p q f)
     

@@ -78,7 +78,7 @@ lobattoIIIBFourthOrderTableau = ButcherTableau [[1 NPN./6,(-1) NPN./6,0],[((1 NP
 lobattoIIIBFourthOrder h f (t, state) = impl h f id id (t, state) where
     impl = genericRKMethod lobattoIIIBFourthOrderTableau []
 
-rk4Classical :: (Ord a, Algebra.Algebraic.C a, SingI p, SingI q) =>  stateType -> a -> (stateType->stateType) -> ([Multivector p q a] -> stateType) -> (stateType -> [Multivector p q a]) -> stateType
+rk4Classical :: (Ord a, Algebra.Algebraic.C a, KnownNat p, KnownNat q) =>  stateType -> a -> (stateType->stateType) -> ([Multivector p q a] -> stateType) -> (stateType -> [Multivector p q a]) -> stateType
 rk4Classical state h f project unproject = project newState where
     update = map (\(k1', k2', k3', k4') -> sumList [k1',2*k2',2*k3',k4'] `divideRight`  Algebra.Ring.fromInteger 6) $ zip4 k1 k2 k3 k4
     newState = zipWith (+) state' update

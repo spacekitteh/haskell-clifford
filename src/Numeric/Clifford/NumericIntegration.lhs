@@ -22,25 +22,27 @@ This is the numeric integration portion of the library.
 
 module Numeric.Clifford.NumericIntegration where
 import Numeric.Clifford.Multivector as MV
-import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate)
+import NumericPrelude hiding (iterate, head, map, tail, reverse, scanl, zipWith, drop, (++), filter, null, length, foldr, foldl1, zip, foldl, concat, (!!), concatMap,any, repeat, replicate, elem, replicate, sum)
 import Algebra.Absolute
 import Algebra.Algebraic
-import Algebra.Additive hiding (elementAdd, elementSub)
+import Algebra.Additive hiding (elementAdd, elementSub,sum)
 import Algebra.Ring
 import Data.Monoid
+import Data.VectorSpace 
+
 import Algebra.ToInteger
 import Algebra.Module
 import Algebra.Field
-import Data.List.Stream
+import Data.List.Stream hiding (sum)
 import Numeric.Natural
 import qualified Data.Vector as V
-import NumericPrelude.Numeric (sum)
-import qualified NumericPrelude.Numeric as NPN 
+import Control.Category.Unicode
+import qualified NumericPrelude.Numeric as NPN hiding (sum)
 import Test.QuickCheck
 import Math.Sequence.Converge (convergeBy)
 import Number.Ratio hiding (scale)
 import Algebra.ToRational
-import Control.Lens hiding (indices)
+import Control.Lens hiding (indices, coerce)
 import Control.Exception (assert)
 import Data.Maybe
 import GHC.TypeLits
@@ -51,13 +53,13 @@ import Data.VectorSpace ((*^))
 import MathObj.Wrapper.Haskell98
 import Numeric.Clifford.Manifold
 import qualified Debug.Trace
-
+import Data.Coerce
 elementAdd = zipWith (+)
 elementScale = zipWith (*>) 
 a `elementSub` b = zipWith (-) a b
 a `elementMul` b = zipWith (*) a b
 
-
+sum = foldl' (+) zero
 
 
 
@@ -84,7 +86,7 @@ convergeList = converge
 
 sumListOfLists = map sumList . transpose 
 
-stateConvergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
+stateConvergeTolLists :: (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, KnownNat p, KnownNat q) 
                    => f ->  [[Multivector p q f]] -> [Multivector p q f]
 stateConvergeTolLists t [] = error "converge: empty list"
 stateConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
@@ -93,10 +95,10 @@ stateConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
       check (a:b:c:_)
           | (myTrace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
-          | (compensatedSum' (map magnitude diffBetweenElements)) <= t = showOutput ("state convergence with tolerance "++ show t )$ Just c where
-            diffBetweenElements = zipWith (\x y -> NPN.abs (x-y)) b c
+          | (compensatedSum' diffBetweenElements) <= t = showOutput ("state convergence with tolerance "++ show t )$ Just c where
+            diffBetweenElements = zipWith approxDifferenceSquared b c
       check _ = Nothing
-guessConvergeTolLists :: forall (p::Nat) (q::Nat) f. (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, SingI p, SingI q) 
+guessConvergeTolLists :: ∀ (p::Nat) (q::Nat) f. (Ord f, Algebra.Absolute.C f, Algebra.Algebraic.C f, Show f, KnownNat p, KnownNat q) 
                    => f ->  [[[Multivector p q f]]] -> [[Multivector p q f]]
 guessConvergeTolLists _ [] = error "converge: empty list"
 guessConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
@@ -107,9 +109,9 @@ guessConvergeTolLists t xs = fromMaybe empty (convergeBy check Just xs)
           | (myTrace ("Converging at " ++ show a) a) == b = Just b
           | a == c = Just c
           | totalDifference <= t = showOutput ("guess convergence with tolerance "++ show t )$ Just c where
-            totalDifference =  compensatedSum' $ zipWith (\x y -> absDiffBetweenLists x y) b c
+            totalDifference =  sum $ zipWith absDiffBetweenLists b c
             absDiffBetweenLists :: [Multivector p q f] -> [Multivector p q f] -> f
-            absDiffBetweenLists x' y' = compensatedSum' $ map magnitude $ zipWith (\x y -> NPN.abs (x-y)) x' y'
+            absDiffBetweenLists x' y' =  sum $ zipWith (approxDifferenceSquared) x' y'
       check _ = Nothing
 
 type ProjectionToManifold p q t stateType = stateType -> [Multivector p q t]
@@ -123,8 +125,8 @@ type RKStepper (p::Nat) (q::Nat) t stateType =
 data ButcherTableau f = ButcherTableau {_tableauA :: [[f]], _tableauB :: [f], _tableauC ∷ [f]} deriving (Eq, Show)
 makeLenses ''ButcherTableau
 
-type StateConvergerFunction f = forall (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
-type GuessConvergerFunction f = forall (p::Nat) (q::Nat) f . [[[Multivector p q f]]] -> [[Multivector p q f]]
+type StateConvergerFunction f = ∀ (p::Nat) (q::Nat) f . [[Multivector p q f]] -> [Multivector p q f]
+type GuessConvergerFunction f = ∀ (p::Nat) (q::Nat) f . [[[Multivector p q f]]] -> [[Multivector p q f]]
 type AdaptiveStepSizeFunction f state = f -> state -> f 
 
 data RKAttribute f state = Explicit
@@ -149,8 +151,8 @@ $( derive makeIs ''RKAttribute)
 {-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) [E3VectorComp]] -> RKStepper 3 0 (MathObj.Wrapper.Haskell98.T (Compensated Double)) [E3VectorComp]#-}
 {-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType] -> RKStepper 3 1 (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType#-}
 {-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) [STVectorComp]] -> RKStepper 3 1 (MathObj.Wrapper.Haskell98.T (Compensated Double)) [STVectorComp]#-}
-genericRKMethod :: forall (p::Nat) (q::Nat) t stateType . 
-                  ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, SingI p, SingI q)
+genericRKMethod :: ∀ (p::Nat) (q::Nat) t stateType . 
+                  ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, KnownNat p, KnownNat q, VectorSpace (ManifoldTangent p q t))
                   =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper p q t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s :: Int
@@ -207,16 +209,17 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
         systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
         systemOfZiGuesses !zk = [zi_plus1 i | i <- [1..s]] where
             atYn =  map (elementAdd state') zk
-            zi_plus1 i =  map ((adaptiveStepSizeFraction * (c i))*>) $ sumListOfLists scaledByAi where
+            zi_plus1 i =  map (h' *>) $ sumListOfLists scaledByAi where
                 h' = adaptiveStepSizeFraction * (c i)
                 guessTime = time + h'
-                scaledByAi = map (snd . unManifoldTangent) $ zipWith (\a evalled-> a *^ evalled) (a i) derivs 
+                scaledByAi ∷ [[Multivector p q t]]
+                scaledByAi = map snd $ map (coerce ∷ ManifoldTangent p q t -> (Manifold p q t, [Multivector p q t])) $ zipWith ( *^) (a i) derivs   
                 derivs ∷ [ManifoldTangent p q t]
-                derivs =  map (evalDerivatives guessTime) $ map Manifold atYn
+                derivs =  map (evalDerivatives guessTime) $ map coerce atYn
         evalDerivatives :: t -> DerivativeFunction p q t 
         --basically a wrapper for f
         evalDerivatives time stateAtTime = ManifoldTangent (stateAtTime, tangent) where
-          tangent =  project $ f time $ deproject $ unManifold stateAtTime 
+          tangent =  (project . (f time) . deproject . unManifold) stateAtTime 
 
 
 \end{code}

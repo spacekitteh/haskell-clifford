@@ -26,11 +26,13 @@ comp a = Cons (fadd a 0.0 compensated)
 m = scalar 1 :: E3VectorComp
 l = scalar 2 :: E3VectorComp
 g = scalar 9.801 :: E3VectorComp
-
-pendulum t [p,theta] =   [ (-m*g*l)* sin theta, p / (m*l*l)] 
+ml = m*l
+mgl = -g*ml
+mll = ml*l
+pendulum t [p,theta] =   [ mgl* sin theta, p / mll] 
 
 integrator = gaussLegendreFourthOrderComp (comp 0.01)  pendulum 
-hamiltonian [ p', theta'] = extract $ magnitude $ (p*p/ (2*m*l*l)) - m*g*l* cos theta where
+hamiltonian [ p', theta'] = extract $ magnitude $ (p*p/ (2*mll)) + mgl* cos theta where
               p = scalar $ comp p'
               theta = scalar $ comp theta'
 

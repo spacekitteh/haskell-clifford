@@ -15,31 +15,29 @@ import Numeric.Clifford.Multivector
 import Data.AdditiveGroup
 import Data.AffineSpace
 import Data.VectorSpace 
-(≡) = (==)
-(⊥) ∷ a
-(⊥) = undefined
+import Prelude.Unicode
 
 -- | Represents an arbitrary Cartesian product of Clifford spaces
 newtype Manifold p q f = Manifold {unManifold ∷ [Multivector p q f]} deriving (Eq)
-(∪) (Manifold a) (Manifold b) = Manifold (a++b)
+
 newtype ManifoldTangent p q f = ManifoldTangent {unManifoldTangent ∷ (Manifold p q f, [Multivector p q f])}
 newtype ManifoldCoTangent p q f = ManifoldCoTangent {unManifoldCoTangent ∷ ManifoldTangent p q f → f }
 
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q) ⇒ AdditiveGroup (ManifoldTangent p q f) where
+instance (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) ⇒ AdditiveGroup (ManifoldTangent p q f) where
          zeroV = ManifoldTangent ((Manifold undefined), zero)
          (^+^) (ManifoldTangent (x,a)) (ManifoldTangent (y,b)) = if x≡y
                                                                     then ManifoldTangent (x,a+b)
                                                                     else undefined 
          negateV (ManifoldTangent (x,t)) = ManifoldTangent (x,negate t) 
 
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q) ⇒ AffineSpace (Manifold p q f) where
+instance (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) ⇒ AffineSpace (Manifold p q f) where
          type Diff (Manifold p q f) = ManifoldTangent p q f
          (.-.) (Manifold a) (Manifold b) = ManifoldTangent (Manifold b, a-b)
          (.+^) (Manifold m) (ManifoldTangent (Manifold x,t)) = if m ≡ x
                                                                   then Manifold (m+t)
                                                                   else undefined
 
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q, (Algebra.Module.C f (Multivector p q f))) ⇒VectorSpace (ManifoldTangent p q f) where
+instance (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q, (Algebra.Module.C f (Multivector p q f))) ⇒VectorSpace (ManifoldTangent p q f) where
          type Scalar (ManifoldTangent p q f) = f
          (*^) scalar (ManifoldTangent (x,t)) = ManifoldTangent (x, scalar *> t)
 

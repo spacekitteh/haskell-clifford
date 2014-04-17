@@ -25,11 +25,13 @@ Expression tree!
 
 \begin{code}
 module Numeric.Clifford.ExpressionTree where
-
+import NumericPrelude (Integer)
 import Numeric.Clifford.Multivector
 import Numeric.Clifford.LinearOperators
+import GHC.TypeLits
 
-data Expr p q t where
+
+data Expr (p::Nat) (q::Nat) t where
     Const :: Multivector p q t → Expr p q t
     Sum :: [Expr p q t] → Expr p q t
     Product :: [Expr p q t] → Expr p q t
@@ -40,7 +42,7 @@ data Expr p q t where
     Root :: Integer → Expr p q t → Expr p q t
     Power :: Expr p q t → Expr p q t → Expr p q t
 
-data Function p q t = Id
+data KnownFunction (p::Nat) (q::Nat) t = Id
                     | Sqrt
 
 \end{code}

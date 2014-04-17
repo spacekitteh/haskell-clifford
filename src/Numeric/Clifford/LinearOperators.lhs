@@ -39,12 +39,12 @@ getFuncFromOperator (LinearOperator' op) = op
 getFuncFromOperator (LinearOperator op) = op
 
 type LinearOperator p q f = LinearOperator' p q f f
-type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> LinearOperator p q f
+type LinearOperatorCreator p q f = (Algebra.Algebraic.C f, Ord f, KnownNat p, KnownNat q) => Multivector p q f -> LinearOperator p q f
 
 instance (Show g, f ~ g) => Show (LinearOperator' p q f g) where
     show = show . getMatrixElementsFromOperator
 
-instance (Algebra.Field.C f, Algebra.Field.C g, Ord f,  Ord g, SingI p, SingI q) => Eq (LinearOperator' p q f g) where
+instance (Algebra.Field.C f, Algebra.Field.C g, Ord f,  Ord g, KnownNat p, KnownNat q) => Eq (LinearOperator' p q f g) where
     a == b = and (map (\ e → (f1 e) == (f2 e)) basisVectors) where
            f1 = getFuncFromOperator a
            f2 = getFuncFromOperator b
@@ -54,12 +54,12 @@ instance Category (LinearOperator' p q) where
     (.) (LinearOperator' a) (LinearOperator' b)  = LinearOperator' (a NP.. b)
 
  
-instance (Algebra.Field.C f, Ord f,Algebra.Field.C g, Ord g, SingI p, SingI q, f~g) => Monoid (LinearOperator' p q f g) where
+instance (Algebra.Field.C f, Ord f,Algebra.Field.C g, Ord g, KnownNat p, KnownNat q, f~g) => Monoid (LinearOperator' p q f g) where
     mempty = id
     mappend = (.)
 
 data EuclideanMove p q f where
-    EuclideanMove :: ∀ (p::Nat) (q::Nat) f.  (Algebra.Field.C f, Ord f, SingI p, SingI q) => { _rotation :: Multivector p q f, _translation :: Multivector p q f} -> EuclideanMove p q f
+    EuclideanMove :: ∀ (p::Nat) (q::Nat) f.  (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) => { _rotation :: Multivector p q f, _translation :: Multivector p q f} -> EuclideanMove p q f
 
 deriving instance Eq(EuclideanMove p q f)
 deriving instance (Show f) => Show (EuclideanMove p q f)
@@ -69,13 +69,13 @@ applyEuclideanMove (EuclideanMove r a) x = (rotate r x) + a
 
 
 
-instance (Algebra.Field.C f, Ord f, SingI p, SingI q) => Monoid (EuclideanMove p q f) where
+instance (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) => Monoid (EuclideanMove p q f) where
     mempty = EuclideanMove one zero
     mappend (EuclideanMove s b) (EuclideanMove r a) = EuclideanMove rot trans where
           rot = r*s
           trans = (rotate s a) + b
 
-{-instance ∀ a b (p::Nat) (q::Nat).(Algebra.Field.C a, SingI p, SingI q, Ord a, Algebra.Field.C b, Ord b) => Category (AffineOperator' p q) where
+{-instance ∀ a b (p::Nat) (q::Nat).(Algebra.Field.C a, KnownNat p, KnownNat q, Ord a, Algebra.Field.C b, Ord b) => Category (AffineOperator' p q) where
     id:: (Algebra.Field.C c) => AffineOperator' p q c c
     id = AffineOperator id zero
     (.) = undefined -}
@@ -102,18 +102,18 @@ getMatrixElementsFromOperator operator = error "Numeric.Clifford.LinearOperator.
     
    
 
-createFunctionalFromElements :: ∀  (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [[f]] ->(Multivector p q f -> Multivector p q f)
+createFunctionalFromElements :: ∀  (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) => [[f]] ->(Multivector p q f -> Multivector p q f)
 createFunctionalFromElements elements = (\x -> f*x) where
     d = (length elements) - 1
     f = sumList $ map elementsForK [0..d]
     column k = let transposed = transpose elements in transposed !! k   
     elementsForK k =sumList $   zipWith (scaleRight) basisVectors (column k) 
     
-createLinearOperatorFromElements :: ∀ (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, SingI p, SingI q) => [[f]] -> LinearOperator p q f
+createLinearOperatorFromElements :: ∀ (p::Nat) (q::Nat) f . (Algebra.Field.C f, Ord f, KnownNat p, KnownNat q) => [[f]] -> LinearOperator p q f
 createLinearOperatorFromElements  = LinearOperator .  createFunctionalFromElements
 
 
-reflect :: (Algebra.Algebraic.C f, Ord f, SingI p, SingI q) => Multivector p q f -> Multivector p q f -> Multivector p q f
+reflect :: (Algebra.Algebraic.C f, Ord f, KnownNat p, KnownNat q) => Multivector p q f -> Multivector p q f -> Multivector p q f
 reflect u x = (-u)*x*recip u
 
 makeReflectionOperator ::LinearOperatorCreator p q f
