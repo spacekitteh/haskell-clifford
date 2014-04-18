@@ -26,22 +26,24 @@ nthOrderCoefficients n order = map fromRational' $ map (δ n order )  [0 .. (ord
 Finite difference coefficients generated from the algorithm in \cite {GenerationOfFiniteDifferenceFormulasOnArbitrarilySpacedGrids}
 \begin{code}
 
---BUG: For negative grid points, only the first coefficient is negated. :S
+
 generateFiniteDifferenceCoefficients ∷ [Rational] → Rational → Integer → Integer → Integer → Rational
-generateFiniteDifferenceCoefficients gridPoints x₀= result where
+generateFiniteDifferenceCoefficients stencil x₀= result where
         ω ∷ Integer → Rational → Rational
-        ω n x =  foldl (*) one $ map (\a → x-a) $ take (fromIntegral n) gridPoints 
+        ω n x =  foldl (*) one $ map (\a → x-a) $ take (fromIntegral n+1) stencil 
 
         α ∷ Integer → Rational
-        α n =  gridPoints !! (fromIntegral n)
+        α n =  stencil !! (fromIntegral n)
         δ ∷ Integer → Integer → Integer → Rational
         δ = memo δ'
-        δ' 0 0 0 = fromValue 1
-        δ' m n ν | m < 0 = fromValue 0
-                 | m ≡ n+1 = fromValue 0
-                 | ν < n ∧ m ≤ n = (((α n) - x₀) *  (δ m (n-1) ν) - m `scale` δ (m-1) (n-1) ν ) / ((α  n) - α  ν)
+        δ' 0 0 0 = one
+        δ' m n ν | m < 0 = zero
+                 | ν > n = zero
+                 | m > n = zero
+                 | ν < n ∧ m ≤ n = (((α n) - x₀) *  (δ m (n-1) ν) - ( m `scale` δ (m-1) (n-1) ν )) / ((α  n) - α  ν)
                  | ν ≡ n ∧ m ≤ n = ((ω (n - 2) (α  (n-1))) / (ω (n-1) (α  n)))  * ((m `scale` δ (m-1) (n-1) (n-1)) - (α (n-1)- x₀) * δ m (n-1) (n-1))
+                 | otherwise = zero
 
-        result = δ--(\ m approxOrder ν → δ m (m + approxOrder - 1 ) ν )
+        result =(\ m approxOrder ν → δ m (m + approxOrder - 1 ) ν )
 
 \end{code}
