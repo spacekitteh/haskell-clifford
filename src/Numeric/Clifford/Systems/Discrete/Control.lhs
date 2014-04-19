@@ -8,6 +8,6 @@ import Control.Wire
 
 makeDerivative = makeNthDerivative 1
 
-makeNthDerivative 
+makeNthDerivative = undefined
 
 \end{code}

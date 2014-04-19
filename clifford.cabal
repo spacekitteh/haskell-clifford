@@ -51,7 +51,7 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Numeric.Clifford.Blade, Numeric.Clifford.Multivector, Numeric.Clifford.NumericIntegration, Numeric.Clifford.NumericIntegration.DefaultIntegrators, Numeric.Clifford.ClassicalMechanics, Numeric.Clifford.LinearOperators, Numeric.Clifford.Internal, Numeric.Clifford.Manifold, Numeric.Clifford.Systems.Components, Numeric.Clifford.ExpressionTree, Numeric.Clifford.Systems.Control
+  exposed-modules:     Numeric.Clifford.Blade, Numeric.Clifford.Multivector, Numeric.Clifford.NumericIntegration, Numeric.Clifford.NumericIntegration.DefaultIntegrators, Numeric.Clifford.ClassicalMechanics, Numeric.Clifford.LinearOperators, Numeric.Clifford.Internal, Numeric.Clifford.Manifold, Numeric.Clifford.Systems.Components, Numeric.Clifford.ExpressionTree, Numeric.Clifford.Systems.Control, Numeric.Clifford.Systems.Discrete.Control
   
   -- Modules included in this library but not exported.
   -- other-modules:       

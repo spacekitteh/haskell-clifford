@@ -1,8 +1,9 @@
+%include{polycode.fmt}
 \begin{code}
-{-# LANGUAGE NoImplicitPrelude, UnicodeSyntax, NPlusKPatterns #-}
+{-# LANGUAGE NoImplicitPrelude, UnicodeSyntax #-}
 module Numeric.Clifford.Systems.Control where
 
-import NumericPrelude hiding (foldl, map, take, (!!), foldl1)
+import NumericPrelude hiding (foldl, map, take, (!!), foldl1, (.), reverse, zipWith)
 --import Numeric.Clifford.Multivector
 --import Numeric.Clifford.LinearOperators
 --import Numeric.Clifford.Manifold
@@ -13,10 +14,12 @@ import Algebra.Field
 import Number.Ratio
 import Data.MemoTrie
 import Algebra.ToRational
---makeDerivative order = makeNthDerivative 1 order
+makeDerivative order = makeNthDerivative 1 order
 
 
-makeNthDerivative n order = 0 where
+makeNthDerivative n order = stencil where
+                  coefficients = reverse $ nthOrderCoefficients n order
+                  stencil = foldl1 (+) . zipWith (*) coefficients
 
 
 nthOrderCoefficients n order = map fromRational' $ map (δ n order )  [0 .. (order+n-1)] where
@@ -30,18 +33,19 @@ Finite difference coefficients generated from the algorithm in \cite {Generation
 generateFiniteDifferenceCoefficients ∷ [Rational] → Rational → Integer → Integer → Integer → Rational
 generateFiniteDifferenceCoefficients stencil x₀= result where
         ω ∷ Integer → Rational → Rational
-        ω n x =  foldl (*) one $ map (\a → x-a) $ take (fromIntegral n+1) stencil 
+        ω n x =  foldl (*) one $ map ((-) x) $ take (fromIntegral n+1) stencil 
 
         α ∷ Integer → Rational
         α n =  stencil !! (fromIntegral n)
+        
         δ ∷ Integer → Integer → Integer → Rational
         δ = memo δ'
         δ' 0 0 0 = one
         δ' m n ν | m < 0 = zero
                  | ν > n = zero
                  | m > n = zero
-                 | ν < n ∧ m ≤ n = (((α n) - x₀) *  (δ m (n-1) ν) - ( m `scale` δ (m-1) (n-1) ν )) / ((α  n) - α  ν)
-                 | ν ≡ n ∧ m ≤ n = ((ω (n - 2) (α  (n-1))) / (ω (n-1) (α  n)))  * ((m `scale` δ (m-1) (n-1) (n-1)) - (α (n-1)- x₀) * δ m (n-1) (n-1))
+                 | ν < n ∧ m ≤ n = ((α n - x₀) * δ m (n - 1) ν - m `scale` δ (m - 1) (n - 1) ν) / (α n - α ν)
+                 | ν ≡ n ∧ m ≤ n = (ω (n - 2) (α (n - 1)) / ω (n - 1) (α n)) * (m `scale` δ (m - 1) (n - 1) (n - 1) - (α (n - 1) - x₀) * δ m (n - 1) (n - 1))
                  | otherwise = zero
 
         result =(\ m approxOrder ν → δ m (m + approxOrder - 1 ) ν )
