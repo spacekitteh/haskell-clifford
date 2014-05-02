@@ -1,5 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude, NoMonomorphismRestriction, DataKinds, FlexibleInstances #-}
-import NumericPrelude (Double, fst, snd, ($), (.), seq, id, show )
+import NumericPrelude (Double, fst, snd, ($), (.), seq, id, show)
 import Prelude (getLine, putStrLn)
 import Algebra.Transcendental
 import Data.List.Stream
@@ -9,7 +9,7 @@ import Algebra.Additive
 import Algebra.Field
 import Numeric.Clifford.NumericIntegration.DefaultIntegrators
 import Numeric.Clifford.Blade
-
+import Control.Monad
 import Control.Lens
 import Graphics.Rendering.Chart
 import Data.Colour
@@ -20,6 +20,9 @@ import Numeric.Compensated
 import Control.DeepSeq
 import MathObj.Wrapper.Haskell98
 import Debug.Trace
+import Data.String
+import System.Remote.Monitoring
+
 comp a = Cons (fadd a 0.0 compensated)
 --comp = id
 
@@ -67,4 +70,6 @@ chart = toRenderable layout
                               toPlot energy]
            $ def
 
-main = renderableToFile def  chart "pendulum.png"
+main = do 
+--    forkServer ( fromString "localhost") 8000
+    renderableToFile def  chart "pendulum.png"

@@ -65,7 +65,7 @@ import Data.Maybe
 import Data.Monoid
 import Data.Data
 import Data.DeriveTH
-import GHC.TypeLits
+import GHC.TypeLits hiding (Symbol)
 import Control.Lens.Lens
 import Data.Word
 import Data.Ord (comparing)
@@ -83,8 +83,26 @@ import Prelude.Unicode
 A multivector is nothing but a linear combination of basis blades.
 
 \begin{code}
+data Symbolic
+data Symbol = MakeSymbol{_friendlyName ∷ String, _latexSymbol ∷ String} deriving (Show, Eq)
 data Multivector (p::Nat) (q::Nat) f where
     BladeSum :: ∀ (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f,KnownNat p, KnownNat q) ⇒ { _terms :: [Blade p q f]} → Multivector p q f
+--    SymbolicMultivector ∷ ∀ (p∷ Nat) (q∷ Nat) . {_symbol ∷ Symbol, _expression ∷ Expr p q} → Multivector p q Symbolic
+
+
+data Expr (p::Nat) (q::Nat) where
+    Const :: {_name ∷ String} → Expr p q
+    Sum :: [Expr p q] → Expr p q
+    Product :: [Expr p q] → Expr p q
+    Apply :: KnownFunction p q → Expr p q → Expr p q
+    Undefined :: Expr p q
+    Symbol :: Symbol → Expr p q
+    Differential :: Symbol → Expr p q → Expr p q
+    Root :: Integer → Expr p q → Expr p q
+    Power :: Expr p q → Expr p q → Expr p q deriving (Show, Eq)
+
+data KnownFunction (p::Nat) (q::Nat) = Id
+                    | Sqrt  deriving (Show, Eq)
 
 
 type STVector = Multivector 3 1 Double
@@ -194,15 +212,15 @@ sumLikeTerms :: (Algebra.Field.C f, KnownNat p, KnownNat q) ⇒ [[Blade p q f]] 
 sumLikeTerms blades = map (\sameIxs → map bScale sameIxs & compensatedSum' & (\result → Blade result ((head sameIxs) & bIndices))) blades
 
 
-instance (Algebra.Field.C f, KnownNat p, KnownNat q, Ord f) ⇒ Data.Monoid.Monoid (Sum (Multivector p q f)) where
+instance (Algebra.Field.C f, KnownNat p, KnownNat q, Ord f) ⇒ Data.Monoid.Monoid (Data.Monoid.Sum (Multivector p q f)) where
     mempty = Data.Monoid.Sum Algebra.Additive.zero
     mappend (Data.Monoid.Sum x) (Data.Monoid.Sum y)= Data.Monoid.Sum  (x + y)
     mconcat = Data.Monoid.Sum . sumList . map getSum
 
-instance (Algebra.Field.C f, KnownNat p, KnownNat q, Ord f) ⇒ Data.Monoid.Monoid (Product (Multivector p q f)) where
-    mempty = Product one
-    mappend (Product x) (Product y) = Product (x * y)
-    mconcat = Product . foldl (*) one . map getProduct
+instance (Algebra.Field.C f, KnownNat p, KnownNat q, Ord f) ⇒ Data.Monoid.Monoid (Data.Monoid.Product (Multivector p q f)) where
+    mempty = Data.Monoid.Product one
+    mappend (Data.Monoid.Product x) (Data.Monoid.Product y) = Data.Monoid.Product (x * y)
+    mconcat = Data.Monoid.Product . foldl (*) one . map getProduct
 
 --Constructs a multivector from a scaled blade.
 {-#INLINE e#-}

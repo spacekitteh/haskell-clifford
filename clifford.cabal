@@ -21,6 +21,7 @@ synopsis:            A Clifford algebra library
 -- URL for the project homepage or repository.
 homepage:            http://github.com/spacekitteh/haskell-clifford
 
+
 -- The license under which the package is released.
 license:             BSD3
 
@@ -72,7 +73,7 @@ library
   
 
 executable pendulum
-  build-depends: base, clifford, numeric-prelude,stream-fusion, Chart, Chart-cairo, colour, lens, data-default-class, deepseq, compensated
+  build-depends: base, clifford, numeric-prelude,stream-fusion, Chart, Chart-cairo, colour, lens, data-default-class, deepseq, compensated, ekg, bytestring
   other-extensions: NoImplicitPrelude, FlexibleInstances
   main-is: Pendulum.hs
   hs-source-dirs: examples
