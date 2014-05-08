@@ -62,7 +62,7 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.6 && <4.9, numeric-prelude, permutation,
                        data-ordlist,  converge, lens, 
-                       deepseq, vector, stream-fusion, criterion, derive, QuickCheck, nats, tagged, cereal,hspec, MemoTrie, semigroupoids , monoid-extras , reflection, compensated, vector-space, vector-space-points, math-functions, base-unicode-symbols, netwire
+                       deepseq, vector, stream-fusion, criterion, derive, QuickCheck, nats, tagged, cereal,hspec, MemoTrie, semigroupoids , monoid-extras , reflection, compensated, vector-space, vector-space-points, math-functions, base-unicode-symbols, netwire, recursion-schemes
   
   ghc-options: -fllvm -fexcess-precision -optlc-O=3 -O3 -ferror-spans -j2
   -- Directories containing source files.
