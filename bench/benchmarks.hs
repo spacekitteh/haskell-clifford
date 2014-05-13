@@ -3,7 +3,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE DataKinds #-}
-{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -optlc-O=3 -O3 #-}
+--{-# OPTIONS_GHC -fllvm -fexcess-precision -optlo-O3 -optlc-O=3 -O3 #-}
 
 import           Numeric.Clifford.Multivector
 import Numeric.Clifford.NumericIntegration.DefaultIntegrators
@@ -11,9 +11,9 @@ import           Criterion.Main
 import Algebra.Transcendental
 import Algebra.Algebraic
 import           Data.List.Stream
-import           NumericPrelude   hiding (iterate, last, map, take, log)
+import           NumericPrelude   hiding (iterate, last, map, take, log, length, replicate)
 import           Prelude          hiding (iterate, last, map, negate, take,log, (*),
-                                   (+), (-), (/))
+                                   (+), (-), (/), length, replicate)
 import Numeric.Compensated
 import MathObj.Wrapper.Haskell98
 import Control.DeepSeq 
@@ -42,6 +42,6 @@ main = defaultMain [
 		     ],
         bgroup "lobatto IIIA 4th order RK solver"
 		    [
-		 bench "200 iterations exponential decay" $ nf (\x -> last $ take 200 (iterate thelambda x)) (0.0,[scalar 1.0])
+		 bench "200 iterations exponential decay" $ nf (\x -> last $ take 200 (iterate thelambda x)) (0.0,replicate 20 $ scalar 1.0)
 		    ]
 		   ]

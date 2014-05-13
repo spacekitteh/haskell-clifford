@@ -207,15 +207,15 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                                                in Just (st',(i+1,st'))) (1,state')
         z = guessConverger $ iterate systemOfZiGuesses initialGuess
         systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
-        systemOfZiGuesses !zk = [zi_plus1 i | i <- [1..s]] `using` parList rdeepseq where
+        systemOfZiGuesses !zk = [zi_plus1 i | i <- [1..s]] `using` parList rseq where
             atYn =  map (elementAdd state') zk
             zi_plus1 i =  map (h' *>) $ sumListOfLists scaledByAi where
                 h' = adaptiveStepSizeFraction * (c i)
                 guessTime = time + h'
                 scaledByAi ∷ [[Multivector p q t]]
-                scaledByAi = map snd $ map (coerce ∷ ManifoldTangent p q t -> (Manifold p q t, [Multivector p q t])) $ zipWith ( *^) (a i) derivs   
+                scaledByAi = map (snd . (coerce ∷ ManifoldTangent p q t -> (Manifold p q t, [Multivector p q t]))) $ zipWith ( *^) (a i) derivs   
                 derivs ∷ [ManifoldTangent p q t]
-                derivs =  map (evalDerivatives guessTime) $ map coerce atYn
+                derivs =  map ((evalDerivatives guessTime) . coerce) atYn
         evalDerivatives :: t -> DerivativeFunction p q t 
         --basically a wrapper for f
         evalDerivatives time stateAtTime = ManifoldTangent (stateAtTime, tangent) where
