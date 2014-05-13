@@ -29,7 +29,7 @@ import Algebra.Additive hiding (elementAdd, elementSub,sum)
 import Algebra.Ring
 import Data.Monoid
 import Data.VectorSpace 
-
+import Control.Parallel.Strategies
 import Algebra.ToInteger
 import Algebra.Module
 import Algebra.Field
@@ -152,7 +152,7 @@ $( derive makeIs ''RKAttribute)
 {-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType] -> RKStepper 3 1 (MathObj.Wrapper.Haskell98.T (Compensated Double)) stateType#-}
 {-#SPECIALISE genericRKMethod :: ButcherTableau (MathObj.Wrapper.Haskell98.T (Compensated Double)) -> [RKAttribute (MathObj.Wrapper.Haskell98.T (Compensated Double)) [STVectorComp]] -> RKStepper 3 1 (MathObj.Wrapper.Haskell98.T (Compensated Double)) [STVectorComp]#-}
 genericRKMethod :: ∀ (p::Nat) (q::Nat) t stateType . 
-                  ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, KnownNat p, KnownNat q, VectorSpace (ManifoldTangent p q t))
+                  ( Ord t, Show t, Algebra.Module.C t (Multivector p q t),Algebra.Absolute.C t, Algebra.Algebraic.C t, KnownNat p, KnownNat q, VectorSpace (ManifoldTangent p q t),NFData t) 
                   =>  ButcherTableau t -> [RKAttribute t stateType] -> RKStepper p q t stateType
 genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
     s :: Int
@@ -207,7 +207,7 @@ genericRKMethod tableau attributes = rkMethodImplicitFixedPoint where
                                                in Just (st',(i+1,st'))) (1,state')
         z = guessConverger $ iterate systemOfZiGuesses initialGuess
         systemOfZiGuesses :: [[Multivector p q t]] -> [[Multivector p q t]]
-        systemOfZiGuesses !zk = [zi_plus1 i | i <- [1..s]] where
+        systemOfZiGuesses !zk = [zi_plus1 i | i <- [1..s]] `using` parList rdeepseq where
             atYn =  map (elementAdd state') zk
             zi_plus1 i =  map (h' *>) $ sumListOfLists scaledByAi where
                 h' = adaptiveStepSizeFraction * (c i)
