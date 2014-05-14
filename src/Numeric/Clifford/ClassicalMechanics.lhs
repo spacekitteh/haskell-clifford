@@ -62,6 +62,30 @@ import Data.Dynamic
 import Data.Data
 import Control.Category
 
+class Energy t a where
+
+class Hamiltonian x p t a where
+ 
+type Hamil x p t = (PhaseSpace x p a, Energy t b) ⇒ a → b
+class PhaseSpace x p a where
+
+class StateSpace x v a where
+
+class ConfigurationSpace q qdot a where
+
+class PhaseSpacePath t x p a where
+    
+instance (PhaseSpace x p a) ⇒ PhaseSpacePath t x p  (t → a) where
+
+
+
+
+
+
+
+
+
+
 nonEqualFrames = "Non-equal reference frames! Insert code here to translate between them! :) Should really make reference frames as types and then have type families to convert between them :v :v :v"
 
 

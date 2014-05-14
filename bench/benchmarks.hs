@@ -42,6 +42,6 @@ main = defaultMain [
 		     ],
         bgroup "lobatto IIIA 4th order RK solver"
 		    [
-		 bench "200 iterations exponential decay" $ nf (\x -> last $ take 200 (iterate thelambda x)) (0.0,replicate 20 $ scalar 1.0)
+		 bench "200 iterations exponential decay" $ nf (\x -> last $ take 200 (iterate thelambda x)) (0.0,replicate 4 $ scalar 1.0)
 		    ]
 		   ]
