@@ -21,17 +21,15 @@ import Control.Arrow
 import GHC.TypeLits
 import Data.Proxy
 import Algebra.Algebraic
+import Data.Traversable
 -- | Represents an arbitrary Cartesian product of Clifford spaces
 newtype Manifold p q f = Manifold {unManifold ∷ [Multivector p q f]} deriving (Eq)
 
---newtype Metric p q f = Metric {unMetric ∷ Multivector p q f → Multivector p q f → f} 
-
 
 class Metric v f a where
-         measure ∷(?metricChoice ∷ MetricName a,  Algebra.Algebraic.C f) ⇒  v → v → f
+     measure ∷(?metricChoice ∷ MetricName a, Algebra.Algebraic.C f) ⇒ v → v → f
 
 data MetricName (name∷Symbol) = ChosenMetric
---newtype MetricName name   = UsingMetric {unMetricName ∷ Proxy name}
 
 instance ∀ p q f f1. f~f1 ⇒ Metric (Multivector p q f) f1 ("Euclidean") where
          measure a b = Numeric.Clifford.Multivector.magnitude $ dot a b
@@ -39,21 +37,28 @@ instance ∀ p q f f1. f~f1 ⇒ Metric (Multivector p q f) f1 ("Euclidean") wher
 instance ∀ p q f f1. (Ord f, KnownNat p, KnownNat q, f~f1) ⇒ Metric (Multivector p q f) f1 ("L₁") where
          measure a b = Numeric.Clifford.Multivector.magnitude $ a - b
 
+data ManifoldName (name∷Symbol) = ChosenManifold
+class (Traversable f) ⇒ Manifold' f obj a where
+    --data CoordinatePatch a = CoordinatePatch {toPatch ∷ obj → Patch a, fromPatch ∷ Patch a → obj, toCoordinates ∷ Patch a → f (Field a), fromCoordinates ∷ f (Field a) → Patch a  }
+    type Field a
+    type Patch a
+    type Tangent a
+    type TangentBundle a
+    type Dimension a∷  Nat
+    type UsesMetric a∷ Symbol
+    atlas ∷ (?manifoldChoice ∷ ManifoldName a) ⇒ f (CoordinatePatch f obj a)
+--    project ∷ (?manifoldChoice ∷ ManifoldName a) ⇒  Base a
+--    unproject ∷ Base a→ a
+    tangent ∷ Patch a → TangentBundle a
+    cotangent ∷ Patch a → (TangentBundle a→ Field a)
 
---(∀ a  vector field . (Metric vector field a ))  ⇒ 
-class Manifold' a where
-    type Base  
-    type Dimension ∷  Nat
-    type UsesMetric ∷ Symbol
-    dimension ∷ a → Proxy ( Dimension )
-    project ∷ a → Base
-    unproject ∷ Base → a
+data CoordinatePatch f obj a  = CoordinatePatch {toPatch ∷ obj → Patch a, fromPatch ∷ Patch a → obj, toCoordinates ∷ Patch a → f (Field a), fromCoordinates ∷ f (Field a) → Patch a  }
 
-data E3
-instance Manifold' E3 where
-    type Base = Multivector 3 0 Double
-    type Dimension = 3
-
+data E3 = E3
+instance Manifold' [] (Multivector 3 0 Double) "E3" where 
+--    type Base E3= (Multivector 3 0 Double)
+    type Dimension "E3"= 3
+    type UsesMetric "E3"= "Euclidean"
 
 newtype ManifoldTangent p q f = ManifoldTangent {unManifoldTangent ∷ (Manifold p q f, [Multivector p q f])}
 newtype ManifoldCoTangent p q f = ManifoldCoTangent {unManifoldCoTangent ∷ ManifoldTangent p q f → f }
