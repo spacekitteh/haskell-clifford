@@ -77,6 +77,7 @@ import Numeric.Compensated
 import MathObj.Wrapper.Haskell98
 import qualified Numeric.Sum as NumericSum hiding (Summation(Double))
 import Prelude.Unicode 
+import Algebra.VectorSpace
 \end{code}
 
 
@@ -382,7 +383,7 @@ takeEvery nth xs = case drop (nth-1) xs of
 seriesPlusMinus (x:y:rest) = x:negate y: seriesPlusMinus rest
 seriesMinusPlus (x:y:rest) = negate x : y : seriesMinusPlus rest
 
-
+instance (Algebra.Field.C f, Algebra.Module.C f (Multivector p q f)) ⇒ Algebra.VectorSpace.C f (Multivector p q f)
 {-#INLINE expTerms#-}
 {-# SPECIALISE INLINE expTerms :: STVector → [STVector]#-}
 {-# SPECIALISE INLINE expTerms :: E3Vector → [E3Vector]#-}
