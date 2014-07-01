@@ -88,22 +88,6 @@ data Symbolic
 data Symbol = MakeSymbol{_friendlyName ∷ String, _latexSymbol ∷ String} deriving (Show, Eq)
 data Multivector (p::Nat) (q::Nat) f where
     BladeSum :: ∀ (p::Nat) (q::Nat) f . (Ord f, Algebra.Field.C f,KnownNat p, KnownNat q) ⇒ { _terms :: [Blade p q f]} → Multivector p q f
---    SymbolicMultivector ∷ ∀ (p∷ Nat) (q∷ Nat) . {_symbol ∷ Symbol, _expression ∷ Expr p q} → Multivector p q Symbolic
-
-
-data Expr (p::Nat) (q::Nat) where
-    Const :: {_name ∷ String} → Expr p q
-    Sum :: [Expr p q] → Expr p q
-    Product :: [Expr p q] → Expr p q
-    Apply :: KnownFunction p q → Expr p q → Expr p q
-    Undefined :: Expr p q
-    Symbol :: Symbol → Expr p q
-    Differential :: Symbol → Expr p q → Expr p q
-    Root :: Integer → Expr p q → Expr p q
-    Power :: Expr p q → Expr p q → Expr p q deriving (Show, Eq)
-
-data KnownFunction (p::Nat) (q::Nat) = Id
-                    | Sqrt  deriving (Show, Eq)
 
 
 type STVector = Multivector 3 1 Double
@@ -150,10 +134,10 @@ mvNormalForm (BladeSum terms) = BladeSum $ mvNormalForm' terms
 mvNormalForm' terms =  if null resultant then [scalarBlade zero] else resultant  where
     resultant = filter bladeNonZero $ addLikeTerms' $ Data.List.Ordered.sortBy compare $  map bladeNormalForm terms
 
-{-#INLINE mvTerms #-}
+
 mvTerms m = _terms m
 
-{-# INLINE addLikeTerms' #-}
+
 addLikeTerms' = sumLikeTerms . groupLikeTerms
 
 {-# INLINE groupLikeTerms #-}
